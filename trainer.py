@@ -36,36 +36,41 @@ class Trainer:
         }
         print("wandb_config:\n",wandb_config)
     
-    def prepare_dataloader(self): # FIXME
+    # FIXME to prepare all subjects data
+        # 1. 일단 train, val, test 다 합쳐서 전체로 만들기
+        # 2. 여기서는 다 불러오기만 하고, EMOTIC dataset과 겹치는 것 필터링은 따로 하기.
+        # 3. 이 단계에서 train, test 딱 필터링해서 데이터 줄 수 없나? -> func 하나 더 만들어서 해결
+    def prepare_dataloader(self): 
         print('Pulling NSD webdataset data...')
 
-        train_url = "{" + f"{self.args.data_path}/webdataset_avg_split/train/train_subj0{self.args.subj}_" + "{0..17}.tar," + f"{self.args.data_path}/webdataset_avg_split/val/val_subj0{self.args.subj}_0.tar" + "}"
-        val_url = f"{self.args.data_path}/webdataset_avg_split/test/test_subj0{self.args.subj}_" + "{0..1}.tar"
+        data_path = "/home/juhyeon/fsx/proj-medarc/fmri/natural-scenes-dataset"
+        train_url = "{" + f"{data_path}/webdataset_avg_split/train/train_subj0{self.args.subj}_" + "{0..17}.tar," + f"{data_path}/webdataset_avg_split/val/val_subj0{self.args.subj}_0.tar" + "}"
+        val_url = f"{data_path}/webdataset_avg_split/test/test_subj0{self.args.subj}_" + "{0..1}.tar"
         print(train_url,"\n",val_url)
-        meta_url = f"{self.args.data_path}/webdataset_avg_split/metadata_subj0{self.args.subj}.json"
-        num_train = 8559 + 300
-        num_val = 982
+        data_url = 
+        num_data = 73000
+
+        """
+        batch_size,
+        image_var='images', 
+        num_devices=None,
+        data_url=None,
+        num_data=None,
+        seed=0,
+        voxels_key="nsdgeneral.npy",
+        to_tuple=["voxels", "images", "coco", "brain_3d"],
+        """
 
         print('Prepping train and validation dataloaders...')
-        train_dl, val_dl, num_train, num_val = utils.get_dataloaders(
+        dataloader = utils.get_dataloaders(
             self.args.batch_size,
             'images',
             num_devices=torch.cuda.device_count(),
-            # num_workers=torch.cuda.device_count() * 4,
-            num_workers=1, #FIXME: num_workers=1 for now
-            train_url=train_url,
-            val_url=val_url,
-            meta_url=meta_url,
-            num_train=num_train,
-            num_val=num_val,
-            val_batch_size=300,
-            cache_dir=self.args.data_path, #"/tmp/wds-cache",
+            data_url=data_url
+            num_data=,
             seed=self.args.seed,
             voxels_key='nsdgeneral.npy',
-            to_tuple=["voxels", "images", "coco"],
-            local_rank=self.local_rank,
-            world_size=self.world_size,
-            subj=self.args.subj,
+            to_tuple=["voxels", "images", "coco", "brain_3d"],
         )
         
         self.train_dl = train_dl

@@ -229,147 +229,162 @@ def _check_whether_images_are_identical(image1, image2):
 
     return (image_hash1 - image_hash2) < SIMILARITY_THRESHOLD
 
-def reshape_brain3d(self, brain_3d):
-        # brain_3d: (batch_size, *, *, *)
+def reshape_brain3d(brain_3d, target_shape=(96, 96, 96)):
+    # Initialize pad_width
+    pad_width = [(0, 0)] * 3  # For 3D brain_3day
 
-        # return: (batch_size, 96, 96, 96)
+    # Calculate padding needed for each dimension
+    for i in range(3):
+        current_size = brain_3d.shape[i]
+        if current_size < target_shape[i]:
+            # Calculate padding
+            total_pad = target_shape[i] - current_size
+            pad_before = total_pad // 2
+            pad_after = total_pad - pad_before
+            pad_width[i] = (pad_before, pad_after)
 
-        shape_x_diff = 96 - brain_3d.shape[1]
-        shape_y_diff = 96 - brain_3d.shape[2]
-        shape_z_diff = 96 - brain_3d.shape[3]
+    # Apply padding
+    brain_3d = np.pad(brain_3d, pad_width=pad_width, mode='constant', constant_values=0)
 
-        shape_x_diff_1 = shape_x_diff // 2
-        shape_x_diff_2 = shape_x_diff - shape_x_diff_1
-        shape_y_diff_1 = shape_y_diff // 2
-        shape_y_diff_2 = shape_y_diff - shape_y_diff_1
-        shape_z_diff_1 = shape_z_diff // 2
-        shape_z_diff_2 = shape_z_diff - shape_z_diff_1
+    # Apply truncation if necessary
+    brain_3d = brain_3d[:target_shape[0], :target_shape[1], :target_shape[2]]
 
-        brain_3d = torch.nn.functional.pad(brain_3d, (shape_z_diff_1, shape_z_diff_2, shape_y_diff_1, shape_y_diff_2, shape_x_diff_1, shape_x_diff_2), mode='constant', value=0)
+    # print("reshaped brain_3d shape", brain_3d.shape)
+    return brain_3d
 
-        return brain_3d
+import scipy.io
+
+def get_emotic_data() -> dict:
+    file_name_emotic_annot = './emotic_annotations.mat'
+
+    ## get EMOTIC data
+    data = scipy.io.loadmat(file_name_emotic_annot, simplify_cells=True)
+    emotic_data = data['train'] + data['test'] + data['val']
+    emotic_coco_data = [x for x in emotic_data if x['original_database']['name']=='mscoco']
+    coco_id = [x['original_database']['info']['image_id'] for x in emotic_coco_data]
+    annotations = [x['person'] for x in emotic_coco_data] 
+    emotic_annotations = []
+    for annot in annotations:
+        annot = [annot] if type(annot)==dict else annot
+
+        valence = []; arousal = []; dominance = []
+        for person in annot:
+            person = person['annotations_continuous']
+            person = [person] if type(person)==dict else person
+            valence += [np.mean([x['valence'] for x in person])]
+            arousal += [np.mean([x['arousal'] for x in person])]
+            dominance += [np.mean([x['dominance'] for x in person])]
+        emotic_annotations += [{ 'valence':valence, 'arousal':arousal, 'dominance':dominance}]
+
+    emotic_annotations = dict(zip(coco_id, emotic_annotations))
+
+    return emotic_annotations
+
+def get_NSD_data(emotic_annotations):
+    # out: target_cocoid
+    file_name_nsd_stim = './nsd_stim_info_merged.csv'
+
+    ## get NSD data
+    df = data = pd.read_csv(file_name_nsd_stim)
+    nsd_id = df['Unnamed: 0'].values
+    nsd_cocoid = df['cocoId'].values
+    nsd_cocosplit = df['cocoSplit'].values
+    nsd_isshared = df['shared1000'].values
+
+    joint_cocoid = nsd_cocoid[np.isin(nsd_cocoid, list(emotic_annotations.keys()))]
+    target_cocoid = [coco_id for coco_id in joint_cocoid if len(get_emotic_annot_indiv(coco_id, 'valence')) == 1]
+    train_cocoid = nsd_cocoid[np.isin(nsd_cocoid, target_cocoid) &  ~nsd_isshared]
+    test_cocoid = nsd_cocoid[np.isin(nsd_cocoid, target_cocoid) &  nsd_isshared]
+
+    # data for common image shown to all subjects
+    # regarding as test set
+    test_df = df[df[['subject1', 'subject2', 'subject3', 'subject4', 'subject5', 'subject6', 'subject7', 'subject8']].all(axis=1)]
+    train_df = df[~df[['subject1', 'subject2', 'subject3', 'subject4', 'subject5', 'subject6', 'subject7', 'subject8']].all(axis=1)]
+
+    return target_cocoid
+
+def get_emotic_annot(emotic_annotations, coco_id, metric_type: str):
+    return np.mean(emotic_annotations[coco_id][metric_type])
+
+def get_emotic_annot_indiv(emotic_annotations, coco_id, metric_type: str):
+    return emotic_annotations[coco_id][metric_type]
 
 def get_dataloaders(
     batch_size,
+    target_cocoid,
     image_var='images',
     num_devices=None,
-    num_workers=None,
-    train_url=None,
-    val_url=None,
-    meta_url=None,
-    num_train=None,
-    num_val=None,
-    cache_dir="/tmp/wds-cache",
+    data_urls=None,
+    num_data=None,
     seed=0,
     voxels_key="nsdgeneral.npy",
-    val_batch_size=None,
     to_tuple=["voxels", "images", "coco", "brain_3d"],
-    local_rank=0,
-    world_size=1,
-    subj=1,
 ):
+    """
+    url에 따른 dataloader return
+    """
+
     print("Getting dataloaders...")
     assert image_var == 'images'
     
     def my_split_by_node(urls):
         return urls
     
-    train_url = list(braceexpand.braceexpand(train_url))
-    val_url = list(braceexpand.braceexpand(val_url))
-    if not os.path.exists(train_url[0]):
-        # we will default to downloading from huggingface urls if data_path does not exist
-        print("downloading NSD from huggingface...")
-        os.makedirs(cache_dir,exist_ok=True, mode=0o777)
-        
-        train_url, val_url, test_url = get_huggingface_urls("main",subj)
-        train_url = list(braceexpand.braceexpand(train_url))
-        val_url = list(braceexpand.braceexpand(val_url))
-        test_url = list(braceexpand.braceexpand(test_url))
-        
-        from tqdm import tqdm
-        for url in tqdm(train_url):
-            destination = cache_dir + "/" + url.rsplit('/', 1)[-1]
-            print(f"\nDownloading {url} to {destination}...")
-            response = requests.get(url)
-            response.raise_for_status()
-            with open(destination, 'wb') as file:
-                file.write(response.content)
-                
-        for url in tqdm(val_url):
-            destination = cache_dir + "/" + url.rsplit('/', 1)[-1]
-            print(f"\nDownloading {url} to {destination}...")
-            response = requests.get(url)
-            response.raise_for_status()
-            with open(destination, 'wb') as file:
-                file.write(response.content)
-                
-        for url in tqdm(test_url):
-            destination = cache_dir + "/" + url.rsplit('/', 1)[-1]
-            print(f"\nDownloading {url} to {destination}...")
-            response = requests.get(url)
-            response.raise_for_status()
-            with open(destination, 'wb') as file:
-                file.write(response.content)
+    # data_url = list(braceexpand.braceexpand(data_url))
 
     if num_devices is None:
         num_devices = torch.cuda.device_count()
     
-    if num_workers is None:
-        num_workers = num_devices
-    
-    if num_train is None:
-        metadata = json.load(open(meta_url))
-        num_train = metadata['totals']['train']
-    if num_val is None:
-        metadata = json.load(open(meta_url))
-        num_val = metadata['totals']['val']
-
-    if val_batch_size is None:
-        val_batch_size = batch_size
         
     print(f"in utils.py: num_devices: {num_devices}")
     global_batch_size = batch_size * num_devices
-    num_batches = math.floor(num_train / global_batch_size)
-    num_worker_batches = math.floor(num_batches / num_workers)
-    if num_worker_batches == 0: num_worker_batches = 1
-    
-    print("\nnum_train",num_train)
+    num_batches = math.floor(num_data / global_batch_size)
+    # num_worker_batches = math.floor(num_batches / num_workers)
+    # if num_worker_batches == 0: num_worker_batches = 1
+
+    print("\nnum_data",num_data)
     print("global_batch_size",global_batch_size)
     print("batch_size",batch_size)
-    print("num_workers",num_workers)
     print("num_batches",num_batches)
-    print("num_worker_batches", num_worker_batches)
+
+    def filter_by_cocoId(sample):
+        # sample: ("voxels", "images", "cocoid", "brain_3d")
+        _, _, cocoid, _ = sample
+        cocoid = cocoid[-1]
+        return (cocoid in target_cocoid)
+
+    def make_brain_valence_pair(sample):
+        # sample: ("voxels", "images", "cocoid", "brain_3d")
+        # add corresponding valence
+        # make sure all brain_3d shape is same
+        # out: brain_3d, valence
+
+        _, _, cocoid, brain_3d = sample
+        cocoid = cocoid[-1]
+        valence = get_emotic_annot(cocoid, 'valence')
+        brain_3d = np.mean(brain_3d, axis=0) # (*, *, *)
+        brain_3d = reshape_brain3d(brain_3d, target_shape=(96, 96, 96)) # (96, 96, 96)
+        
+        return brain_3d, valence
     
-    # train_url = train_url[local_rank:world_size]
-    train_data = wds.WebDataset(train_url, resampled=True, cache_dir=cache_dir, nodesplitter=my_split_by_node)\
-        .shuffle(500, initial=500, rng=random.Random(42))\
+    target_urls = []
+    for url in data_urls:
+        target_urls += list(braceexpand.braceexpand(url))
+
+    # for url in data_urls:
+    dataset = wds.WebDataset(target_urls, resampled=True, nodesplitter=my_split_by_node)\
+        .shuffle(500, initial=500, rng=random.Random(seed))\
         .decode("torch")\
         .rename(images="jpg;png", voxels=voxels_key, trial="trial.npy", coco="coco73k.npy", reps="num_uniques.npy", brain_3d = "wholebrain_3d.npy")\
         .to_tuple(*to_tuple)\
+        .select(filter_by_cocoId)\
+        .map(make_brain_valence_pair)\
         .batched(batch_size, partial=True)\
-        .with_epoch(num_worker_batches)
+        # .with_epoch(num_worker_batches)
 
-    train_dl = torch.utils.data.DataLoader(train_data, batch_size=None, num_workers=1, shuffle=False)       
-
-    # Validation 
-    # should be deterministic, no shuffling!    
-    num_batches = math.floor(num_val / global_batch_size)
-    num_worker_batches = math.floor(num_batches / num_workers)
-    if num_worker_batches == 0: num_worker_batches = 1
+    train_dl = torch.utils.data.DataLoader(dataset, batch_size=None, num_workers=1, shuffle=False)       
     
-    print("\nnum_val",num_val)
-    print("val_num_batches",num_batches)
-    print("val_batch_size",val_batch_size)
-    
-    val_data = wds.WebDataset(val_url, resampled=False, cache_dir=cache_dir, nodesplitter=my_split_by_node)\
-        .decode("torch")\
-        .rename(images="jpg;png", voxels=voxels_key, trial="trial.npy", coco="coco73k.npy", reps="num_uniques.npy", brain_3d = "wholebrain_3d.npy")\
-        .to_tuple(*to_tuple)\
-        .batched(val_batch_size, partial=False)
-    
-    val_dl = torch.utils.data.DataLoader(val_data, batch_size=None, num_workers=1, shuffle=False)
-    
-    return train_dl, val_dl, num_train, num_val
+    return train_dl
 
 def get_torch_dataloaders(
     batch_size,
