@@ -347,13 +347,15 @@ def get_dataloaders(
     print("batch_size",batch_size)
     print("num_batches",num_batches)
 
+    # filter
     def filter_by_cocoId(sample):
         # sample: ("voxels", "images", "cocoid", "brain_3d")
         _, _, cocoid, _ = sample
         cocoid = cocoid[-1]
         return (cocoid in target_cocoid)
 
-    def make_brain_valence_pair(sample):
+    # mapper
+    def map_brain_valence_pair(sample):
         # sample: ("voxels", "images", "cocoid", "brain_3d")
         # add corresponding valence
         # make sure all brain_3d shape is same
@@ -378,7 +380,7 @@ def get_dataloaders(
         .rename(images="jpg;png", voxels=voxels_key, trial="trial.npy", coco="coco73k.npy", reps="num_uniques.npy", brain_3d = "wholebrain_3d.npy")\
         .to_tuple(*to_tuple)\
         .select(filter_by_cocoId)\
-        .map(make_brain_valence_pair)\
+        .map(map_brain_valence_pair)\
         .batched(batch_size, partial=True)\
         # .with_epoch(num_worker_batches)
 
