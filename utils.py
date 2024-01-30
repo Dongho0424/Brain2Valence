@@ -19,10 +19,18 @@ import socket
 from clip_retrieval.clip_client import ClipClient
 import time 
 import braceexpand
-from models import Clipper,OpenClipper
 from nsd_dataset import NSDDataset, NSDConcatDataset
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+def set_seed(args):
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    np.random.seed(args.seed)
+    random.seed(args.seed)
 
 def is_interactive():
     import __main__ as main
@@ -221,6 +229,26 @@ def _check_whether_images_are_identical(image1, image2):
 
     return (image_hash1 - image_hash2) < SIMILARITY_THRESHOLD
 
+def reshape_brain3d(self, brain_3d):
+        # brain_3d: (batch_size, *, *, *)
+
+        # return: (batch_size, 96, 96, 96)
+
+        shape_x_diff = 96 - brain_3d.shape[1]
+        shape_y_diff = 96 - brain_3d.shape[2]
+        shape_z_diff = 96 - brain_3d.shape[3]
+
+        shape_x_diff_1 = shape_x_diff // 2
+        shape_x_diff_2 = shape_x_diff - shape_x_diff_1
+        shape_y_diff_1 = shape_y_diff // 2
+        shape_y_diff_2 = shape_y_diff - shape_y_diff_1
+        shape_z_diff_1 = shape_z_diff // 2
+        shape_z_diff_2 = shape_z_diff - shape_z_diff_1
+
+        brain_3d = torch.nn.functional.pad(brain_3d, (shape_z_diff_1, shape_z_diff_2, shape_y_diff_1, shape_y_diff_2, shape_x_diff_1, shape_x_diff_2), mode='constant', value=0)
+
+        return brain_3d
+
 def get_dataloaders(
     batch_size,
     image_var='images',
@@ -235,7 +263,7 @@ def get_dataloaders(
     seed=0,
     voxels_key="nsdgeneral.npy",
     val_batch_size=None,
-    to_tuple=["voxels", "images", "trial"],
+    to_tuple=["voxels", "images", "coco", "brain_3d"],
     local_rank=0,
     world_size=1,
     subj=1,
@@ -316,7 +344,7 @@ def get_dataloaders(
     train_data = wds.WebDataset(train_url, resampled=True, cache_dir=cache_dir, nodesplitter=my_split_by_node)\
         .shuffle(500, initial=500, rng=random.Random(42))\
         .decode("torch")\
-        .rename(images="jpg;png", voxels=voxels_key, trial="trial.npy", coco="coco73k.npy", reps="num_uniques.npy")\
+        .rename(images="jpg;png", voxels=voxels_key, trial="trial.npy", coco="coco73k.npy", reps="num_uniques.npy", brain_3d = "wholebrain_3d.npy")\
         .to_tuple(*to_tuple)\
         .batched(batch_size, partial=True)\
         .with_epoch(num_worker_batches)
@@ -335,7 +363,7 @@ def get_dataloaders(
     
     val_data = wds.WebDataset(val_url, resampled=False, cache_dir=cache_dir, nodesplitter=my_split_by_node)\
         .decode("torch")\
-        .rename(images="jpg;png", voxels=voxels_key, trial="trial.npy", coco="coco73k.npy", reps="num_uniques.npy")\
+        .rename(images="jpg;png", voxels=voxels_key, trial="trial.npy", coco="coco73k.npy", reps="num_uniques.npy", brain_3d = "wholebrain_3d.npy")\
         .to_tuple(*to_tuple)\
         .batched(val_batch_size, partial=False)
     
