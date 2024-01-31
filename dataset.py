@@ -4,7 +4,6 @@ import numpy as np
 import os
 import pandas as pd
 from torch.utils.data import Dataset
-
 class BrainValenceDataset(Dataset):
     def __init__(self,  data_path, split, emotic_annotations, nsd_df, target_cocoid, subjects=[1, 2, 5, 7]):
         self.data_path = data_path
@@ -45,8 +44,8 @@ class BrainValenceDataset(Dataset):
         sample = self.metadata.iloc[idx]
         id = self.coco_id.iloc[idx]
         brain_3d = torch.from_numpy(np.load(os.path.join(self.data_path, self.split, sample['mri']))) # (3, *, *, *)
-        brain_3d = np.mean(brain_3d, axis=0) # (*, *, *)
-        brain_3d = self.reshape_brain3d(brain_3d, target_shape=(96, 96, 96)) # (96, 96, 96)
+        brain_3d = torch.mean(brain_3d, dim=0) # (*, *, *)
+        brain_3d = self.reshape_brain3d(brain_3d) # (96, 96, 96)
         
         valence = np.mean(self.emotic_annotations[id]['valence'])
 
@@ -66,24 +65,21 @@ class BrainValenceDataset(Dataset):
 
         return coco_id
     
-    def reshape_brain3d(brain_3d, target_shape=(96, 96, 96)):
-        # Initialize pad_width
-        pad_width = [(0, 0)] * 3  # For 3D brain_3day
+    def reshape_brain3d(self, brain_3d: torch.Tensor):
+        # brain_3d: (*, *, *)
+        # return: (96, 96, 96)
 
-        # Calculate padding needed for each dimension
-        for i in range(3):
-            current_size = brain_3d.shape[i]
-            if current_size < target_shape[i]:
-                # Calculate padding
-                total_pad = target_shape[i] - current_size
-                pad_before = total_pad // 2
-                pad_after = total_pad - pad_before
-                pad_width[i] = (pad_before, pad_after)
+        shape_x_diff = 96 - brain_3d.shape[0]
+        shape_y_diff = 96 - brain_3d.shape[1]
+        shape_z_diff = 96 - brain_3d.shape[2]
 
-        # Apply padding
-        brain_3d = np.pad(brain_3d, pad_width=pad_width, mode='constant', constant_values=0)
+        shape_x_diff_1 = shape_x_diff // 2
+        shape_x_diff_2 = shape_x_diff - shape_x_diff_1
+        shape_y_diff_1 = shape_y_diff // 2
+        shape_y_diff_2 = shape_y_diff - shape_y_diff_1
+        shape_z_diff_1 = shape_z_diff // 2
+        shape_z_diff_2 = shape_z_diff - shape_z_diff_1
 
-        # Apply truncation if necessary
-        brain_3d = brain_3d[:target_shape[0], :target_shape[1], :target_shape[2]]
+        brain_3d = torch.nn.functional.pad(brain_3d, (shape_z_diff_1, shape_z_diff_2, shape_y_diff_1, shape_y_diff_2, shape_x_diff_1, shape_x_diff_2), mode='constant', value=0)
 
         return brain_3d
