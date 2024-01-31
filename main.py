@@ -32,7 +32,7 @@ def get_args():
     args.add_argument("--num-workers", type=int, default=4, help="Number of workers")
     args.add_argument("--optimizer", type=str, default="adamw", help="Optimizer")
     args.add_argument("--scheduler", type=str, default="cosine", help="Scheduler")
-    args.add_argument("--save-path", type=str, default="./iaps_trained_models", help="Save path")
+    args.add_argument("--save-path", type=str, default="./trained_models", help="Save path")
     args.add_argument("--criterion", type=str, default="mse", help="Criterion", choices=["mse", "mae"])
     args.add_argument("--normalize", action="store_true", help="Normalize", default=False)
     args.add_argument("--n_layers", type=int, default=1, help="Number of layers")

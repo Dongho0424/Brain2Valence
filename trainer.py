@@ -35,53 +35,31 @@ class Trainer:
             "seed": self.args.seed,
         }
         print("wandb_config:\n",wandb_config)
-    
-    # FIXME to prepare all subjects data
-        # 1. 일단 train, val, test 다 합쳐서 전체로 만들기
-        # 2. 여기서는 다 불러오기만 하고, EMOTIC dataset과 겹치는 것 필터링은 따로 하기.
-        # 3. 이 단계에서 train, test 딱 필터링해서 데이터 줄 수 없나? -> func 하나 더 만들어서 해결
+        
     def prepare_dataloader(self): 
-        print('Pulling NSD webdataset data...')
+        print("Pulling Brain and Valence pair data...")
 
         data_path = "/home/juhyeon/fsx/proj-medarc/fmri/natural-scenes-dataset"
-        train_url = "{" + f"{data_path}/webdataset_avg_split/train/train_subj0{self.args.subj}_" + "{0..17}.tar," + f"{data_path}/webdataset_avg_split/val/val_subj0{self.args.subj}_0.tar" + "}"
-        val_url = f"{data_path}/webdataset_avg_split/test/test_subj0{self.args.subj}_" + "{0..1}.tar"
-        print(train_url,"\n",val_url)
-        data_url = 
-        num_data = 73000
-
-        """
-        def get_dataloaders(
-            batch_size,
-            target_cocoid,
-            image_var='images',
-            num_devices=None,
-            data_urls=None,
-            num_data=None,
-            seed=0,
-            voxels_key="nsdgeneral.npy",
-            to_tuple=["voxels", "images", "coco", "brain_3d"],
-        ):
-        """
 
         print('Prepping train and validation dataloaders...')
-        dataloader = utils.get_dataloaders(
+
+        emotic_annotations = utils.get_emotic_data()
+        nsd_df, target_cocoid = utils.get_NSD_data(emotic_annotations)
+
+        train_dl, val_dl, num_train, num_val = utils.get_torch_dataloaders(
             self.args.batch_size,
-            'images',
-            num_devices=torch.cuda.device_count(),
-            data_url=data_url
-            num_data=,
-            seed=self.args.seed,
-            voxels_key='nsdgeneral.npy',
-            to_tuple=["voxels", "images", "coco", "brain_3d"],
+            data_path = data_path,
+            emotic_annotations=emotic_annotations,
+            nsd_df=nsd_df,
+            target_cocoid=target_cocoid,
+            mode='train',
+            subjects=[1, 2, 5, 7]
         )
-        
+
         self.train_dl = train_dl
         self.val_dl = val_dl
         self.num_train = num_train
         self.num_val = num_val
-        self.train_url = train_url
-        self.val_url = val_url
     
     def get_model():
         model = Brain2ValenceModel()
@@ -117,42 +95,28 @@ class Trainer:
         self.model.cuda()
         best_val_loss = float("inf")
         for epoch in range(args.epochs):
-            self.model.train() # TODO
+            self.model.train() 
             train_loss = 0
-            for i, (img, valence_mean, valence_sd, arousal_mean, arousal_sd) in enumerate(self.train_loader):
+            for i, (brain_3d, valence) in enumerate(self.train_dl):
                 self.optimizer.zero_grad()
-                img = img.cuda()
-                valence_mean = valence_mean.cuda()
-                arousal_mean = arousal_mean.cuda()
-                pred_valence_mean, pred_arousal_mean = self.model(img)
-                if args.mode == "both":
-                    valence_mean = valence_mean.float()
-                    arousal_mean = arousal_mean.float()
-                    loss = self.criterion(pred_valence_mean, valence_mean) + self.criterion(pred_arousal_mean, arousal_mean)
-                elif args.mode == "valence":
-                    valence_mean = valence_mean.float()
-                    loss = self.criterion(pred_valence_mean, valence_mean)
+                pred_valence = self.model(brain_3d)
+                
+                loss = self.criterion(pred_valence, valence)
                 loss.backward()
                 self.optimizer.step()
-                train_loss += loss.item() * img.size(0)
+                train_loss += loss.item() * brain_3d[0] # divide by batch size
             
-            train_loss /= len(self.train_loader.dataset)
+            train_loss /= len(self.num_train)
             wandb.log({"train_loss": train_loss, 
                     "lr": self.optimizer.param_groups[0]['lr']}, step=epoch)
                 
             self.model.eval()
             val_loss = 0
-            for i, (img, valence_mean, valence_sd, arousal_mean, arousal_sd) in enumerate(self.val_loader):
-                img = img.cuda()
-                valence_mean = valence_mean.cuda()
-                arousal_mean = arousal_mean.cuda()
-                pred_valence_mean, pred_arousal_mean = self.model(img)
-                if args.mode == "both":
-                    loss = self.criterion(pred_valence_mean, valence_mean) + self.criterion(pred_arousal_mean, arousal_mean)
-                elif args.mode == "valence":
-                    loss = self.criterion(pred_valence_mean, valence_mean)
-                val_loss += loss.item() * img.size(0)
-            val_loss /= len(self.val_loader.dataset)
+            for i, (brain_3d, valence) in enumerate(self.val_dl):
+                pred_valence = self.model(brain_3d)
+                loss = self.criterion(pred_valence, valence)
+                val_loss += loss.item() * brain_3d[0] # divide by batch size
+            val_loss /= len(self.num_val) 
             wandb.log({"val_loss": val_loss}, step=epoch)
             
             if val_loss < best_val_loss:
@@ -194,3 +158,32 @@ class Trainer:
         else:
             torch.save(model.state_dict(), os.path.join(save_dir, log_name + "_last_model.pth"))
             # wandb.save(os.path.join(save_dir, log_name + "_last_model.pth"))
+
+# def prepare_dataloader(self): 
+    #     print('Pulling NSD webdataset data...')
+
+    #     data_path = "/home/juhyeon/fsx/proj-medarc/fmri/natural-scenes-dataset"
+    #     train_url = "{" + f"{data_path}/webdataset_avg_split/train/train_subj0{self.args.subj}_" + "{0..17}.tar," + f"{data_path}/webdataset_avg_split/val/val_subj0{self.args.subj}_0.tar" + "}"
+    #     val_url = f"{data_path}/webdataset_avg_split/test/test_subj0{self.args.subj}_" + "{0..1}.tar"
+    #     print(train_url,"\n",val_url)
+    #     data_url = 
+    #     num_data = 73000
+
+    #     print('Prepping train and validation dataloaders...')
+    #     dataloader = utils.get_dataloaders(
+    #         self.args.batch_size,
+    #         'images',
+    #         num_devices=torch.cuda.device_count(),
+    #         data_url=data_url
+    #         num_data=,
+    #         seed=self.args.seed,
+    #         voxels_key='nsdgeneral.npy',
+    #         to_tuple=["voxels", "images", "coco", "brain_3d"],
+    #     )
+        
+    #     self.train_dl = train_dl
+    #     self.val_dl = val_dl
+    #     self.num_train = num_train
+    #     self.num_val = num_val
+    #     self.train_url = train_url
+    #     self.val_url = val_url

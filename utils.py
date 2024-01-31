@@ -212,35 +212,48 @@ def get_torch_dataloaders(
     emotic_annotations,
     nsd_df,
     target_cocoid, 
+    mode='train',
     subjects=[1, 2, 5, 7]
 ):
-    train_dataset = BrainValenceDataset(
-        data_path=data_path,
-        split="train",
-        emotic_annotations=emotic_annotations,
-        nsd_df=nsd_df,
-        target_cocoid=target_cocoid,
-        subjects=subjects
-    )
-    val_dataset = BrainValenceDataset(
-        data_path=data_path,
-        split="val",
-        emotic_annotations=emotic_annotations,
-        nsd_df=nsd_df,
-        target_cocoid=target_cocoid,
-        subjects=subjects
-    )
-    test_dataset = BrainValenceDataset(
-        data_path=data_path,
-        split="test",
-        emotic_annotations=emotic_annotations,
-        nsd_df=nsd_df,
-        target_cocoid=target_cocoid,
-        subjects=subjects
-    )
-    
-    train_dl = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_dl = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-    test_dl = torch.utils.data.DataLoader(test_dataset, batch_size=300, shuffle=False)
+    if mode == 'train':
+
+        train_dataset = BrainValenceDataset(
+            data_path=data_path,
+            split="train",
+            emotic_annotations=emotic_annotations,
+            nsd_df=nsd_df,
+            target_cocoid=target_cocoid,
+            subjects=subjects
+        )
+        val_dataset = BrainValenceDataset(
+            data_path=data_path,
+            split="val",
+            emotic_annotations=emotic_annotations,
+            nsd_df=nsd_df,
+            target_cocoid=target_cocoid,
+            subjects=subjects
+        )
+
+        train_dl = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        val_dl = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+        return train_dl, val_dl, len(train_dataset), len(val_dataset)
+ 
+    elif mode == 'test':
+
+        test_dataset = BrainValenceDataset(
+            data_path=data_path,
+            split="test",
+            emotic_annotations=emotic_annotations,
+            nsd_df=nsd_df,
+            target_cocoid=target_cocoid,
+            subjects=subjects
+        )
+        
+
+        test_dl = torch.utils.data.DataLoader(test_dataset, batch_size=300, shuffle=False)
    
-    return train_dl, val_dl, test_dl, len(train_dataset), len(val_dataset), len(test_dataset)
+        return test_dl, len(test_dataset)
+    
+    else: 
+        TypeError("Wrong mode for dataloader")
