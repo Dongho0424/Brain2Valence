@@ -19,7 +19,7 @@ import socket
 from clip_retrieval.clip_client import ClipClient
 import time 
 import braceexpand
-from nsd_dataset import NSDDataset, NSDConcatDataset
+from dataset import BrainValenceDataset
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -155,105 +155,8 @@ def soft_cont_loss(student_preds, teacher_preds, teacher_aug_preds, temp=0.125, 
     
     loss = (loss1 + loss2)/2
     return loss
-
-def mixco(voxels, beta=0.15, s_thresh=0.5):
-    perm = torch.randperm(voxels.shape[0])
-    voxels_shuffle = voxels[perm].to(voxels.device,dtype=voxels.dtype)
-    betas = torch.distributions.Beta(beta, beta).sample([voxels.shape[0]]).to(voxels.device,dtype=voxels.dtype)
-    select = (torch.rand(voxels.shape[0]) <= s_thresh).to(voxels.device)
-    betas_shape = [-1] + [1]*(len(voxels.shape)-1)
-    voxels[select] = voxels[select] * betas[select].reshape(*betas_shape) + \
-        voxels_shuffle[select] * (1 - betas[select]).reshape(*betas_shape)
-    betas[~select] = 1
-    return voxels, perm, betas, select
-
-def mixco_clip_target(clip_target, perm, select, betas):
-    clip_target_shuffle = clip_target[perm]
-    clip_target[select] = clip_target[select] * betas[select].reshape(-1, 1) + \
-        clip_target_shuffle[select] * (1 - betas[select]).reshape(-1, 1)
-    return clip_target
-
-def mixco_nce(preds, targs, temp=0.1, perm=None, betas=None, select=None, distributed=False, 
-              accelerator=None, local_rank=None, bidirectional=True):
-    brain_clip = (preds @ targs.T)/temp
+import scipy
     
-    if perm is not None and betas is not None and select is not None:
-        probs = torch.diag(betas)
-        probs[torch.arange(preds.shape[0]).to(preds.device), perm] = 1 - betas
-
-        loss = -(brain_clip.log_softmax(-1) * probs).sum(-1).mean()
-        if bidirectional:
-            loss2 = -(brain_clip.T.log_softmax(-1) * probs.T).sum(-1).mean()
-            loss = (loss + loss2)/2
-        return loss
-    else:
-        loss =  F.cross_entropy(brain_clip, torch.arange(brain_clip.shape[0]).to(brain_clip.device))
-        if bidirectional:
-            loss2 = F.cross_entropy(brain_clip.T, torch.arange(brain_clip.shape[0]).to(brain_clip.device))
-            loss = (loss + loss2)/2
-        return loss
-
-def count_params(model):
-    total = sum(p.numel() for p in model.parameters())
-    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print('param counts:\n{:,} total\n{:,} trainable'.format(total, trainable))
-
-def image_grid(imgs, rows, cols):
-    w, h = imgs[0].size
-    grid = PIL.Image.new('RGB', size=(cols*w, rows*h))
-    for i, img in enumerate(imgs):
-        grid.paste(img, box=(i%cols*w, i//cols*h))
-    return grid
-
-def get_huggingface_urls(commit='main',subj=1):
-    base_url = "https://huggingface.co/datasets/pscotti/naturalscenesdataset/resolve/"
-    train_url = base_url + commit + f"/webdataset_avg_split/train/train_subj0{subj}_" + "{0..17}.tar"
-    val_url = base_url + commit + f"/webdataset_avg_split/val/val_subj0{subj}_0.tar"
-    test_url = base_url + commit + f"/webdataset_avg_split/test/test_subj0{subj}_" + "{0..1}.tar"
-    return train_url, val_url, test_url
-    
-def check_loss(loss):
-    if loss.isnan().any():
-        raise ValueError('NaN loss')
-        
-def _check_whether_images_are_identical(image1, image2):
-    from imagehash import phash
-
-    pil_image1 = transforms.ToPILImage()(image1)
-    pil_image2 = transforms.ToPILImage()(image2)
-
-    SIMILARITY_THRESHOLD = 90
-
-    image_hash1 = phash(pil_image1, hash_size=16)
-    image_hash2 = phash(pil_image2, hash_size=16)
-
-    return (image_hash1 - image_hash2) < SIMILARITY_THRESHOLD
-
-def reshape_brain3d(brain_3d, target_shape=(96, 96, 96)):
-    # Initialize pad_width
-    pad_width = [(0, 0)] * 3  # For 3D brain_3day
-
-    # Calculate padding needed for each dimension
-    for i in range(3):
-        current_size = brain_3d.shape[i]
-        if current_size < target_shape[i]:
-            # Calculate padding
-            total_pad = target_shape[i] - current_size
-            pad_before = total_pad // 2
-            pad_after = total_pad - pad_before
-            pad_width[i] = (pad_before, pad_after)
-
-    # Apply padding
-    brain_3d = np.pad(brain_3d, pad_width=pad_width, mode='constant', constant_values=0)
-
-    # Apply truncation if necessary
-    brain_3d = brain_3d[:target_shape[0], :target_shape[1], :target_shape[2]]
-
-    # print("reshaped brain_3d shape", brain_3d.shape)
-    return brain_3d
-
-import scipy.io
-
 def get_emotic_data() -> dict:
     file_name_emotic_annot = './emotic_annotations.mat'
 
@@ -285,46 +188,39 @@ def get_NSD_data(emotic_annotations):
     file_name_nsd_stim = './nsd_stim_info_merged.csv'
 
     ## get NSD data
-    df = data = pd.read_csv(file_name_nsd_stim)
-    nsd_id = df['Unnamed: 0'].values
+    df = pd.read_csv(file_name_nsd_stim)
+    nsd_id = df['nsdId'].values
     nsd_cocoid = df['cocoId'].values
     nsd_cocosplit = df['cocoSplit'].values
     nsd_isshared = df['shared1000'].values
 
     joint_cocoid = nsd_cocoid[np.isin(nsd_cocoid, list(emotic_annotations.keys()))]
-    target_cocoid = [coco_id for coco_id in joint_cocoid if len(get_emotic_annot_indiv(coco_id, 'valence')) == 1]
+    target_cocoid = [coco_id for coco_id in joint_cocoid if len(emotic_annotations[coco_id]['valence']) == 1]
     train_cocoid = nsd_cocoid[np.isin(nsd_cocoid, target_cocoid) &  ~nsd_isshared]
     test_cocoid = nsd_cocoid[np.isin(nsd_cocoid, target_cocoid) &  nsd_isshared]
 
-    # data for common image shown to all subjects
-    # regarding as test set
-    test_df = df[df[['subject1', 'subject2', 'subject3', 'subject4', 'subject5', 'subject6', 'subject7', 'subject8']].all(axis=1)]
-    train_df = df[~df[['subject1', 'subject2', 'subject3', 'subject4', 'subject5', 'subject6', 'subject7', 'subject8']].all(axis=1)]
-
-    return target_cocoid
-
-def get_emotic_annot(emotic_annotations, coco_id, metric_type: str):
-    return np.mean(emotic_annotations[coco_id][metric_type])
-
-def get_emotic_annot_indiv(emotic_annotations, coco_id, metric_type: str):
-    return emotic_annotations[coco_id][metric_type]
-
+    return df, target_cocoid
+    
 def get_dataloaders(
     batch_size,
     target_cocoid,
     image_var='images',
     num_devices=None,
-    data_urls=None,
+    train_data_urls=None,
+    val_data_urls=None,
+    test_data_urls=None,
     num_data=None,
     seed=0,
     voxels_key="nsdgeneral.npy",
     to_tuple=["voxels", "images", "coco", "brain_3d"],
 ):
     """
-    data_urls: array of data url
+    train_data_urls: array of train data url
+    val_data_urls: array of val data url
+    test_data_urls: array of test data url
     target_cocoid(coco id from both NSD & EMOTIC dataset)
     
-    out: dataloader that returns (brain3d, valence)
+    out: three dataloaders that all returns (brain3d, valence)
     """
 
     print("Getting dataloaders...")
@@ -350,14 +246,12 @@ def get_dataloaders(
     print("batch_size",batch_size)
     print("num_batches",num_batches)
 
-    # filter
     def filter_by_cocoId(sample):
         # sample: ("voxels", "images", "cocoid", "brain_3d")
         _, _, cocoid, _ = sample
         cocoid = cocoid[-1]
         return (cocoid in target_cocoid)
 
-    # mapper
     def map_brain_valence_pair(sample):
         # sample: ("voxels", "images", "cocoid", "brain_3d")
         # add corresponding valence
@@ -372,12 +266,15 @@ def get_dataloaders(
         
         return brain_3d, valence
     
-    target_urls = []
-    for url in data_urls:
-        target_urls += list(braceexpand.braceexpand(url))
+    ### train ###
+    
+    train_target_urls = []
+    for url in train_data_urls:
+        train_target_urls += list(braceexpand.braceexpand(url))
+    print("len(train_target_urls):", len(train_target_urls))
 
     # for url in data_urls:
-    dataset = wds.WebDataset(target_urls, resampled=True, nodesplitter=my_split_by_node)\
+    train_dataset = wds.WebDataset(train_target_urls, resampled=True, nodesplitter=my_split_by_node)\
         .shuffle(500, initial=500, rng=random.Random(seed))\
         .decode("torch")\
         .rename(images="jpg;png", voxels=voxels_key, trial="trial.npy", coco="coco73k.npy", reps="num_uniques.npy", brain_3d = "wholebrain_3d.npy")\
@@ -387,26 +284,88 @@ def get_dataloaders(
         .batched(batch_size, partial=True)\
         # .with_epoch(num_worker_batches)
 
-    train_dl = torch.utils.data.DataLoader(dataset, batch_size=None, num_workers=1, shuffle=False)       
+    train_dl = torch.utils.data.DataLoader(train_dataset, batch_size=None, num_workers=1, shuffle=False)       
+
+    ### val ###
     
-    return train_dl
+    val_target_urls = []
+    for url in val_data_urls:
+        val_target_urls += list(braceexpand.braceexpand(url))
+    print("len(val_target_urls):", len(val_target_urls))
+
+    # for url in data_urls:
+    val_dataset = wds.WebDataset(val_target_urls, resampled=True, nodesplitter=my_split_by_node)\
+        .shuffle(500, initial=500, rng=random.Random(seed))\
+        .decode("torch")\
+        .rename(images="jpg;png", voxels=voxels_key, trial="trial.npy", coco="coco73k.npy", reps="num_uniques.npy", brain_3d = "wholebrain_3d.npy")\
+        .to_tuple(*to_tuple)\
+        .select(filter_by_cocoId)\
+        .map(map_brain_valence_pair)\
+        .batched(batch_size, partial=True)\
+        # .with_epoch(num_worker_batches)
+
+    val_dl = torch.utils.data.DataLoader(val_dataset, batch_size=None, num_workers=1, shuffle=False)       
+
+    ### test ###
+    
+    test_target_urls = []
+    for url in test_data_urls:
+        test_target_urls += list(braceexpand.braceexpand(url))
+    print("len(test_target_urls):", len(test_target_urls))
+
+    # for url in data_urls:
+    test_dataset = wds.WebDataset(test_target_urls, resampled=True, nodesplitter=my_split_by_node)\
+        .shuffle(500, initial=500, rng=random.Random(seed))\
+        .decode("torch")\
+        .rename(images="jpg;png", voxels=voxels_key, trial="trial.npy", coco="coco73k.npy", reps="num_uniques.npy", brain_3d = "wholebrain_3d.npy")\
+        .to_tuple(*to_tuple)\
+        .select(filter_by_cocoId)\
+        .map(map_brain_valence_pair)\
+        .batched(batch_size, partial=True)\
+        # .with_epoch(num_worker_batches)
+
+    test_dl = torch.utils.data.DataLoader(test_dataset, batch_size=None, num_workers=1, shuffle=False)       
+    
+    return train_dl, val_dl, test_dl
 
 def get_torch_dataloaders(
     batch_size,
     data_path,
-    subj=1
+    emotic_annotations,
+    nsd_df,
+    target_cocoid, 
+    subjects=[1, 2, 5, 7]
 ):
-    train_data = NSDDataset(data_path, 'train', subj)
-    val_data = NSDDataset(data_path, 'val', subj)
-    test_data = NSDDataset(data_path, 'test', subj)
+    train_dataset = BrainValenceDataset(
+        data_path=data_path,
+        split="train",
+        emotic_annotations=emotic_annotations,
+        nsd_df=nsd_df,
+        target_cocoid=target_cocoid,
+        subjects=subjects
+    )
+    val_dataset = BrainValenceDataset(
+        data_path=data_path,
+        split="val",
+        emotic_annotations=emotic_annotations,
+        nsd_df=nsd_df,
+        target_cocoid=target_cocoid,
+        subjects=subjects
+    )
+    test_dataset = BrainValenceDataset(
+        data_path=data_path,
+        split="test",
+        emotic_annotations=emotic_annotations,
+        nsd_df=nsd_df,
+        target_cocoid=target_cocoid,
+        subjects=subjects
+    )
     
-    train_data = NSDConcatDataset(train_data, val_data)
-    train_dl = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True)
-    # val_dl = torch.utils.data.DataLoader(val_data, batch_size=batch_size, shuffle=False)
-    test_dl = torch.utils.data.DataLoader(test_data, batch_size=300, shuffle=False)
+    train_dl = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_dl = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    test_dl = torch.utils.data.DataLoader(test_dataset, batch_size=300, shuffle=False)
    
-    return train_dl, test_dl, len(train_data), len(test_data)
-    # return train_dl, val_dl, test_dl    
+    return train_dl, val_dl, test_dl, len(train_dataset), len(val_dataset), len(test_dataset)
 
 def cosine_anneal(start, end, steps):
     return end + (start - end)/2 * (1 + torch.cos(torch.pi*torch.arange(steps)/(steps-1)))

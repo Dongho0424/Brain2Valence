@@ -51,14 +51,17 @@ class Trainer:
         num_data = 73000
 
         """
-        batch_size,
-        image_var='images', 
-        num_devices=None,
-        data_url=None,
-        num_data=None,
-        seed=0,
-        voxels_key="nsdgeneral.npy",
-        to_tuple=["voxels", "images", "coco", "brain_3d"],
+        def get_dataloaders(
+            batch_size,
+            target_cocoid,
+            image_var='images',
+            num_devices=None,
+            data_urls=None,
+            num_data=None,
+            seed=0,
+            voxels_key="nsdgeneral.npy",
+            to_tuple=["voxels", "images", "coco", "brain_3d"],
+        ):
         """
 
         print('Prepping train and validation dataloaders...')

@@ -1,0 +1,8 @@
+img,mri,coco,voxel,trial,num_uniques
+val_subj01_0/sample000000247.jpg,val_subj01_0/sample000000126.wholebrain_3d.npy,val_subj01_0/sample000000188.coco73k.npy,val_subj01_0/sample000000024.nsdgeneral.npy,val_subj01_0/sample000000183.trial.npy,val_subj01_0/sample000000178.num_uniques.npy
+val_subj01_0/sample000000052.jpg,val_subj01_0/sample000000233.wholebrain_3d.npy,val_subj01_0/sample000000155.coco73k.npy,val_subj01_0/sample000000090.nsdgeneral.npy,val_subj01_0/sample000000201.trial.npy,val_subj01_0/sample000000088.num_uniques.npy
+val_subj01_0/sample000000275.jpg,val_subj01_0/sample000000211.wholebrain_3d.npy,val_subj01_0/sample000000233.coco73k.npy,val_subj01_0/sample000000111.nsdgeneral.npy,val_subj01_0/sample000000214.trial.npy,val_subj01_0/sample000000065.num_uniques.npy
+val_subj01_0/sample000000162.jpg,val_subj01_0/sample000000265.wholebrain_3d.npy,val_subj01_0/sample000000200.coco73k.npy,val_subj01_0/sample000000026.nsdgeneral.npy,val_subj01_0/sample000000028.trial.npy,val_subj01_0/sample000000245.num_uniques.npy
+val_subj01_0/sample000000037.jpg,val_subj01_0/sample000000074.wholebrain_3d.npy,val_subj01_0/sample000000294.coco73k.npy,val_subj01_0/sample000000207.nsdgeneral.npy,val_subj01_0/sample000000080.trial.npy,val_subj01_0/sample000000209.num_uniques.npy
+
+
