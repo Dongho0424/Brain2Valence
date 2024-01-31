@@ -321,7 +321,10 @@ def get_dataloaders(
     to_tuple=["voxels", "images", "coco", "brain_3d"],
 ):
     """
-    url에 따른 dataloader return
+    data_urls: array of data url
+    target_cocoid(coco id from both NSD & EMOTIC dataset)
+    
+    out: dataloader that returns (brain3d, valence)
     """
 
     print("Getting dataloaders...")
