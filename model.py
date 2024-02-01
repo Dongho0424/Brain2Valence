@@ -7,28 +7,15 @@ class Brain2ValenceModel(nn.Module):
     def __init__(self):
         super().__init__()    
         
-        # TODO: using MONAI
-        # self.model = torch.hub.load('pytorch/vision:v0.6.0', model_name, pretrained=pretrained)
-        """
-        def __init__(
-        self,
-        block: type[ResNetBlock | ResNetBottleneck] | str,
-        layers: list[int],
-        block_inplanes: list[int],
-        """
-        self.model = resnet.ResNet(
-            block='basic',
-            layers=[3,3,3,3],
-            block_inplanes=[3,3,3,3],
-            num_classes=400
-        )
-        self.backbone = nn.Sequential(*list(self.model.children())[:-1])
-        self.fc_valence = nn.Linear(self.model.fc.in_features, 1)
+        self.model = resnet.resnet18(n_input_channels=1,  num_classes=1, feed_forward=True)
             
-    def forward(self, x) -> torch.Tensor:
-        x = self.backbone(x)
-        x = x.view(x.size(0), -1).float()
-
-        valence = self.fc_valence(x)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        x: (B, 96, 96, 96)
+        out: (B, 1)
+        """
+        # add channel dimension
+        x = x.unsqueeze(dim=1) # (B, 96, 96, 96) -> (B, 1, 96, 96, 96)
+        valence = self.model(x)
         
-        return valence.float().squeeze()
+        return valence.float().squeeze(dim=-1)

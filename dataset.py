@@ -4,21 +4,25 @@ import numpy as np
 import os
 import pandas as pd
 from torch.utils.data import Dataset
+
+# TODO: *** sub별로 학습하고 eval 한 거 따로 해보기. ***
+# TODO: train val 합쳐서 8:2로 나누기.
+# - suffle해서 나누기
+# - suffle seed 고정
+
 class BrainValenceDataset(Dataset):
     def __init__(self,  data_path, split, emotic_annotations, nsd_df, target_cocoid, subjects=[1, 2, 5, 7]):
         self.data_path = data_path
         self.split = split # train, val, test
         self.subjects = subjects # [1, 2, 5, 7]
-        if split in ['train', 'val']:
-            dfs = [pd.read_csv(os.path.join(self.data_path, f'{self.split}_subj0{subj}_metadata.csv')) for subj in self.subjects]
-            self.metadata = pd.concat(dfs)
-        elif split == 'test':
-            # As test data is all same to every subjects,
-            df = pd.read_csv(os.path.join(self.data_path, 'test_subj01_metadata.csv'))
-            self.metadata = df
-        else: IndexError("Wrong split type")
         
+        dfs = [pd.read_csv(os.path.join(self.data_path, f'{self.split}_subj0{subj}_metadata.csv')) for subj in self.subjects]
+        self.metadata = pd.concat(dfs)
         self.metadata.reset_index(inplace=True, drop=True)       
+
+        np.random.seed(0) # split seed
+        np.random.shuffle(self.metadata)
+        # 8:2로 나눠서 하기!
 
         ## get joint data between NSD and EMOTIC and COCO
         self.nsd_df = nsd_df

@@ -13,3 +13,4 @@ src/evals-*
 /train_logs
 /fsx
 fsx
+playgrounds/*

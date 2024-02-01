@@ -7,13 +7,14 @@ from torchvision import transforms
 from torch.utils.data import DataLoader
 import utils 
 from model import Brain2ValenceModel
+from tqdm import tqdm
 
 class Trainer:
     def __init__(self, args):
         self.args = args
 
+        self.train_dl, self.val_dl, self.num_train, self.num_val = self.prepare_dataloader()
         self.set_wandb_config()
-        self.train_dl, self.val_dl, self.num_train, self.num_val = self.prepare_dataloader(args)
         self.model: nn.Module = self.get_model()
         self.optimizer = self.get_optimizer()
         self.scheduler = self.get_scheduler()
@@ -26,20 +27,27 @@ class Trainer:
         print(f"wandb {wandb_project} run {wandb_run}")
         wandb.login(host='https://api.wandb.ai')
         wandb_config = {
-            "model_name": self.args.model_name,
-            
+            "model_name": self.args.model_name,    
             "batch_size": self.args.batch_size,
-            "epochs": self.args.num_epochs,
+            "epochs": self.args.epochs,
             "num_train": self.num_train,
             "num_val": self.num_val,
             "seed": self.args.seed,
         }
         print("wandb_config:\n",wandb_config)
+
+        wandb.init(
+            id = self.args.model_name,
+            project=wandb_project,
+            name=wandb_run,
+            config=wandb_config,
+            resume="allow",
+        )
         
     def prepare_dataloader(self): 
         print("Pulling Brain and Valence pair data...")
 
-        data_path = "/home/juhyeon/fsx/proj-medarc/fmri/natural-scenes-dataset"
+        data_path="/home/juhyeon/fsx/proj-medarc/fmri/natural-scenes-dataset/webdataset_avg_split"
 
         print('Prepping train and validation dataloaders...')
 
@@ -60,8 +68,10 @@ class Trainer:
         self.val_dl = val_dl
         self.num_train = num_train
         self.num_val = num_val
+
+        return train_dl, val_dl, num_train, num_val
     
-    def get_model():
+    def get_model(self):
         model = Brain2ValenceModel()
         return model
 
@@ -91,43 +101,66 @@ class Trainer:
             criterion = nn.L1Loss()
         return criterion
     
-    def train(self, args):
+    def train(self):
+        #### enter Training ###
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print('Device:', device)
+        print('Current cuda device:', torch.cuda.current_device())
+        print('Count of using GPUs:', torch.cuda.device_count())
+        #### enter Training ###
+
         self.model.cuda()
         best_val_loss = float("inf")
-        for epoch in range(args.epochs):
+        for epoch in range(self.args.epochs):
             self.model.train() 
             train_loss = 0
-            for i, (brain_3d, valence) in enumerate(self.train_dl):
+            for i, (brain_3d, valence) in tqdm(enumerate(self.train_dl)):
                 self.optimizer.zero_grad()
+                brain_3d = brain_3d.float().cuda()
+                valence = valence.float().cuda()
+                # valence 0~1로 normalize
+                # 해석할 때는 10 곱해서 해석하는 것.
+                valence /= 10.0
                 pred_valence = self.model(brain_3d)
+                print("brain_3d.shape:", brain_3d.shape)
+                print("valence.shape:", valence.shape)
+                print("pred_valence.shape:", pred_valence.shape)
                 
                 loss = self.criterion(pred_valence, valence)
                 loss.backward()
                 self.optimizer.step()
-                train_loss += loss.item() * brain_3d[0] # divide by batch size
+                # loss.item(): batch의 average loss
+                # batch size 곱해주면 total loss
+                train_loss += loss.item() * brain_3d.shape[0] # divide by batch size
             
+            # 지금까지 train_loss를 총합하였으니, 데이터 개수로 average. 
             train_loss /= len(self.num_train)
             wandb.log({"train_loss": train_loss, 
                     "lr": self.optimizer.param_groups[0]['lr']}, step=epoch)
                 
             self.model.eval()
             val_loss = 0
-            for i, (brain_3d, valence) in enumerate(self.val_dl):
+            for i, (brain_3d, valence) in tqdm(enumerate(self.val_dl)):
+                brain_3d = brain_3d.float().cuda()
+                valence = valence.float().cuda()
+
+                # valence 0~1로 normalize
+                valence /= 10.0
                 pred_valence = self.model(brain_3d)
                 loss = self.criterion(pred_valence, valence)
-                val_loss += loss.item() * brain_3d[0] # divide by batch size
+                val_loss += loss.item() * brain_3d.shape[0] # divide by batch size
             val_loss /= len(self.num_val) 
             wandb.log({"val_loss": val_loss}, step=epoch)
             
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
-                self.save_model(args, self.model, best=True)
+                self.save_model(self.args, self.model, best=True)
                 
             self.scheduler.step()
 
             print("Epoch: {}, Train Loss: {:.4f}, Val Loss: {:.4f}".format(epoch, train_loss, val_loss))
         
-        self.save_model(args, self.model, best=False)
+        self.save_model(self.args, self.model, best=False)
         wandb.log({"best_val_loss": best_val_loss})
         return self.model
     

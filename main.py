@@ -13,7 +13,7 @@ def get_args():
 
     # wandb related arguments
     args.add_argument('--wandb-log', action='store_true', help='use wandb')
-    args.add_argument('--wandb-name', type=str, default='Dongho Choi', help='name of wandb run')
+    args.add_argument('--wandb-name', type=str, default='test', help='name as id, particular wandb run')
     args.add_argument('--wandb-project', type=str, default='MindsEye', help='name of wandb project')
     args.add_argument('--wandb-entity', type=str, default='donghochoi', help='name of wandb entity')
 
@@ -37,7 +37,6 @@ def get_args():
     args.add_argument("--normalize", action="store_true", help="Normalize", default=False)
     args.add_argument("--n_layers", type=int, default=1, help="Number of layers")
     args.add_argument("--mode", type=str, default="valence", help="Mode", choices=["both", "valence"])
-    args.add_argument("--test_split", action="store_true", help="Test split", default=False)
     args.add_argument("--mix_dataset", action="store_true", help="Mix dataset", default=False)
     
     # # split arguments with respect to execution mode
