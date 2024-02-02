@@ -22,24 +22,25 @@ class Trainer:
 
     def set_wandb_config(self):
         wandb_project = self.args.wandb_project
-        wandb_run = self.args.wandb_name
+        wandb_name = self.args.wandb_name
         
-        print(f"wandb {wandb_project} run {wandb_run}")
+        print(f"wandb {wandb_project} run {wandb_name}")
         wandb.login(host='https://api.wandb.ai')
         wandb_config = {
-            "model_name": self.args.model_name,    
+            "model_name": self.args.wandb_name,    
             "batch_size": self.args.batch_size,
             "epochs": self.args.epochs,
             "num_train": self.num_train,
             "num_val": self.num_val,
             "seed": self.args.seed,
+            "weight_decay": self.args.weight_decay,
         }
         print("wandb_config:\n",wandb_config)
 
         wandb.init(
-            id = self.args.model_name,
+            id = self.args.wandb_name,
             project=wandb_project,
-            name=wandb_run,
+            name=wandb_name,
             config=wandb_config,
             resume="allow",
         )
@@ -122,19 +123,19 @@ class Trainer:
                 # 해석할 때는 10 곱해서 해석하는 것.
                 valence /= 10.0
                 pred_valence = self.model(brain_3d)
-                print("brain_3d.shape:", brain_3d.shape)
-                print("valence.shape:", valence.shape)
-                print("pred_valence.shape:", pred_valence.shape)
+                # print("brain_3d.shape:", brain_3d.shape)
+                # print("valence.shape:", valence.shape)
+                # print("pred_valence.shape:", pred_valence.shape)
                 
                 loss = self.criterion(pred_valence, valence)
                 loss.backward()
                 self.optimizer.step()
                 # loss.item(): batch의 average loss
                 # batch size 곱해주면 total loss
-                train_loss += loss.item() * brain_3d.shape[0] # divide by batch size
+                train_loss += loss.item() * brain_3d.shape[0] # multiply by batch size
             
             # 지금까지 train_loss를 총합하였으니, 데이터 개수로 average. 
-            train_loss /= len(self.num_train)
+            train_loss /= float(self.num_train)
             wandb.log({"train_loss": train_loss, 
                     "lr": self.optimizer.param_groups[0]['lr']}, step=epoch)
                 
@@ -148,12 +149,13 @@ class Trainer:
                 valence /= 10.0
                 pred_valence = self.model(brain_3d)
                 loss = self.criterion(pred_valence, valence)
-                val_loss += loss.item() * brain_3d.shape[0] # divide by batch size
-            val_loss /= len(self.num_val) 
+                val_loss += loss.item() * brain_3d.shape[0] # multiply by batch size
+            val_loss /= float(self.num_val)
             wandb.log({"val_loss": val_loss}, step=epoch)
             
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
+                wandb.log({"best_val_loss": best_val_loss})
                 self.save_model(self.args, self.model, best=True)
                 
             self.scheduler.step()
@@ -181,7 +183,8 @@ class Trainer:
 
     def save_model(self, args, model, best):
         log_name = self.make_log_name(args)
-        save_dir = os.path.join(args.save_path, args.wandb_run_name)
+        model_name = args.model_name # kind of "all subjects" or "subject 1" ..
+        save_dir = os.path.join(args.save_path, model_name)
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
             

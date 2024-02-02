@@ -251,7 +251,7 @@ def get_torch_dataloaders(
         )
         
 
-        test_dl = torch.utils.data.DataLoader(test_dataset, batch_size=300, shuffle=False)
+        test_dl = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
    
         return test_dl, len(test_dataset)
     

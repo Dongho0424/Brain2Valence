@@ -18,23 +18,24 @@ class Predictor:
 
     def set_wandb_config(self):
         wandb_project = self.args.wandb_project
-        wandb_run = self.args.wandb_name
+        wandb_name = self.args.wandb_name
         
-        print(f"wandb {wandb_project} run {wandb_run}")
+        print(f"wandb {wandb_project} run {wandb_name}")
         wandb.login(host='https://api.wandb.ai')
         wandb_config = {
-            "model_name": self.args.model_name,    
+            "model_name": self.args.wandb_name,    
             "batch_size": self.args.batch_size,
             "epochs": self.args.epochs,
             "num_test": self.num_test,
             "seed": self.args.seed,
+            "weight_decay": self.args.weight_decay,
         }
         print("wandb_config:\n",wandb_config)
 
         wandb.init(
-            id = self.args.model_name,
+            id = self.args.wandb_name,
             project=wandb_project,
-            name=wandb_run,
+            name=wandb_name,
             config=wandb_config,
             resume="allow",
         )
@@ -50,7 +51,7 @@ class Predictor:
         nsd_df, target_cocoid = utils.get_NSD_data(emotic_annotations)
 
         test_dl, num_test = utils.get_torch_dataloaders(
-            self.args.batch_size,
+            1, # 1 for test data loader
             data_path = data_path,
             emotic_annotations=emotic_annotations,
             nsd_df=nsd_df,
@@ -64,13 +65,14 @@ class Predictor:
 
         return test_dl, num_test
     
-    def get_model(self):
+    def get_model(self) -> nn.Module :
         model = Brain2ValenceModel()
-        best_path = os.path.join(self.args.save_path, self.args.wandb_run_name, self.make_log_name(self.args) + "_best_model.pth")
-        model = model.load_state_dict(torch.load(best_path))
+        model_name = self.args.model_name # kind of "all subjects" or "subject 1" ..
+        best_path = os.path.join(self.args.save_path, model_name, self.make_log_name(self.args) + "_best_model.pth")
+        model.load_state_dict(torch.load(best_path))
         return model
     
-    def predict(self, args):
+    def predict(self):
         #### enter Predicting ###
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print('Device:', device)
@@ -92,10 +94,16 @@ class Predictor:
                 valence /= 10.0
                 pred_valence = self.model(brain_3d)
 
-                true_valences.append(valence)
+                # print("##FOR DEBUG##")
+                # print("SHAPES:", valence.shape, pred_valence.shape)
+
+                true_valences.append(valence.item())
                 pred_valences.append(pred_valence.item())
 
-        print("RMSE: {:.4f}, R squared: {:.4f}".format(np.sqrt(mean_squared_error(true_valences, pred_valences)), r2_score(true_valences, pred_valences)))
+        rmse = np.sqrt(mean_squared_error(true_valences, pred_valences))
+        r2 = r2_score(true_valences, pred_valences)
+        print("RMSE: {:.4f}, R squared: {:.4f}".format(rmse, r2))
+        wandb.log({"RMSE": rmse, "r2_score": r2})
 
         # Plot true vs pred valence 
         plt.scatter(true_valences, pred_valences)

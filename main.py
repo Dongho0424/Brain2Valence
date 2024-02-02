@@ -14,18 +14,18 @@ def get_args():
     # wandb related arguments
     args.add_argument('--wandb-log', action='store_true', help='use wandb')
     args.add_argument('--wandb-name', type=str, default='test', help='name as id, particular wandb run')
-    args.add_argument('--wandb-project', type=str, default='MindsEye', help='name of wandb project')
+    args.add_argument('--wandb-project', type=str, default='Brain2Valence', help='name of wandb project')
     args.add_argument('--wandb-entity', type=str, default='donghochoi', help='name of wandb entity')
 
     # execute options
+    args.add_argument('--model-name', type=str, default='all_subjects', help='name of model')
     args.add_argument('--exec_mode', type=str, choices=['train', 'predict'], required=True, help='execution mode')
-    args.add_argument('--model_name', type=str, default='Brain2Valence', help='name of model')
     args.add_argument('--seed', type=int, default=42, help='random seed')
 
     # for train
     args.add_argument("--epochs", type=int, default=100, help="Number of epochs")
-    args.add_argument("--batch-size", type=int, default=32, help="Batch size")
-    args.add_argument("--lr", type=float, default=1e-3, help="Learning rate")
+    args.add_argument("--batch-size", type=int, default=16, help="Batch size")
+    args.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
     args.add_argument("--weight-decay", type=float, default=1e-4, help="Weight decay")
     args.add_argument("--momentum", type=float, default=0.9, help="Momentum")
     args.add_argument("--model", type=str, default="resnet18", help="Model")
@@ -33,7 +33,7 @@ def get_args():
     args.add_argument("--optimizer", type=str, default="adamw", help="Optimizer")
     args.add_argument("--scheduler", type=str, default="cosine", help="Scheduler")
     args.add_argument("--save-path", type=str, default="./trained_models", help="Save path")
-    args.add_argument("--criterion", type=str, default="mse", help="Criterion", choices=["mse", "mae"])
+    args.add_argument("--criterion", type=str, default="mae", help="Criterion", choices=["mse", "mae"])
     args.add_argument("--normalize", action="store_true", help="Normalize", default=False)
     args.add_argument("--n_layers", type=int, default=1, help="Number of layers")
     args.add_argument("--mode", type=str, default="valence", help="Mode", choices=["both", "valence"])
