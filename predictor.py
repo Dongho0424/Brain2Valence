@@ -14,7 +14,7 @@ class Predictor:
 
         self.test_dl, self.num_test = self.prepare_dataloader()
         self.set_wandb_config()
-        self.model: nn.Module = self.get_model()
+        self.model: nn.Module = self.load_model(args)
 
     def set_wandb_config(self):
         wandb_project = self.args.wandb_project
@@ -65,10 +65,10 @@ class Predictor:
 
         return test_dl, num_test
     
-    def get_model(self) -> nn.Module :
+    def load_model(self, args) -> nn.Module :
         model = Brain2ValenceModel()
-        model_name = self.args.model_name # kind of "all subjects" or "subject 1" ..
-        best_path = os.path.join(self.args.save_path, model_name, self.make_log_name(self.args) + "_best_model.pth")
+        model_name = args.model_name # ex) "all_subjects_res18_mae_2"
+        best_path = os.path.join(self.args.save_path, model_name, "best_model.pth")
         model.load_state_dict(torch.load(best_path))
         return model
     

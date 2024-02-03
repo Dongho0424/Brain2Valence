@@ -136,8 +136,9 @@ class Trainer:
             
             # 지금까지 train_loss를 총합하였으니, 데이터 개수로 average. 
             train_loss /= float(self.num_train)
-            wandb.log({"train_loss": train_loss, 
-                    "lr": self.optimizer.param_groups[0]['lr']}, step=epoch)
+            wandb.log(
+                {"train_loss": train_loss, 
+                 "lr": self.optimizer.param_groups[0]['lr']}, step=epoch)
                 
             self.model.eval()
             val_loss = 0
@@ -183,17 +184,15 @@ class Trainer:
 
     def save_model(self, args, model, best):
         log_name = self.make_log_name(args)
-        model_name = args.model_name # kind of "all subjects" or "subject 1" ..
+        model_name = args.model_name # ex) "all_subjects_res18_mae_2"
         save_dir = os.path.join(args.save_path, model_name)
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
             
         if best:
-            torch.save(model.state_dict(), os.path.join(save_dir, log_name + "_best_model.pth"))
-            # wandb.save(os.path.join(save_dir, log_name + "_best_model.pth"))
+            torch.save(model.state_dict(), os.path.join(save_dir, "best_model.pth"))
         else:
-            torch.save(model.state_dict(), os.path.join(save_dir, log_name + "_last_model.pth"))
-            # wandb.save(os.path.join(save_dir, log_name + "_last_model.pth"))
+            torch.save(model.state_dict(), os.path.join(save_dir, "last_model.pth"))
 
 # def prepare_dataloader(self): 
     #     print('Pulling NSD webdataset data...')
