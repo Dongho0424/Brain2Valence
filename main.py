@@ -13,12 +13,18 @@ def get_args():
 
     # wandb related arguments
     args.add_argument('--wandb-log', action='store_true', help='use wandb')
+    # wandb_name: wandb의 id로 쓰이면서, 날짜, 모델, lr, 등등 wandb log에서 구분하기 쉽도록 함.
+    # ex) 240203_res18_mae_01_predict
     args.add_argument('--wandb-name', type=str, default='test', help='name as id, particular wandb run')
     args.add_argument('--wandb-project', type=str, default='Brain2Valence', help='name of wandb project')
     args.add_argument('--wandb-entity', type=str, default='donghochoi', help='name of wandb entity')
 
     # execute options
+    # model_name: model 저장 디렉토리 및 현재 모델의 개괄 설명 간단히
+    # kind of all_subjects_res18_mae_01, subject1_res18_mae_01
     args.add_argument('--model-name', type=str, default='all_subjects', help='name of model')
+    args.add_argument('--all-subjects', action='store_true', default=False, help='train or predict for all subjects')
+    args.add_argument('--subj', type=int, default=1, choices=[1,2,5,7], help='train or predict for particular subject number')
     args.add_argument('--exec_mode', type=str, choices=['train', 'predict'], required=True, help='execution mode')
     args.add_argument('--seed', type=int, default=42, help='random seed')
 

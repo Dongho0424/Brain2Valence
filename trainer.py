@@ -22,12 +22,11 @@ class Trainer:
 
     def set_wandb_config(self):
         wandb_project = self.args.wandb_project
-        wandb_name = self.args.wandb_name
-        
-        print(f"wandb {wandb_project} run {wandb_name}")
+        model_name = self.args.model_name
+        print(f"wandb {wandb_project} run {model_name}")
         wandb.login(host='https://api.wandb.ai')
         wandb_config = {
-            "model_name": self.args.wandb_name,    
+            "model_name": self.args.model_name,    
             "batch_size": self.args.batch_size,
             "epochs": self.args.epochs,
             "num_train": self.num_train,
@@ -40,7 +39,7 @@ class Trainer:
         wandb.init(
             id = self.args.wandb_name,
             project=wandb_project,
-            name=wandb_name,
+            name=self.args.wandb_name,
             config=wandb_config,
             resume="allow",
         )
@@ -55,20 +54,26 @@ class Trainer:
         emotic_annotations = utils.get_emotic_data()
         nsd_df, target_cocoid = utils.get_NSD_data(emotic_annotations)
 
+        self.subjects = [1, 2, 5, 7] if self.args.all_subjects else [self.args.subj]
+        print('Train for current subjects:,', [f"subject{sub}" for sub in self.subjects])
+
         train_dl, val_dl, num_train, num_val = utils.get_torch_dataloaders(
-            self.args.batch_size,
+            batch_size=self.args.batch_size,
             data_path = data_path,
             emotic_annotations=emotic_annotations,
             nsd_df=nsd_df,
             target_cocoid=target_cocoid,
             mode='train',
-            subjects=[1, 2, 5, 7]
+            subjects=self.subjects
         )
 
         self.train_dl = train_dl
         self.val_dl = val_dl
         self.num_train = num_train
         self.num_val = num_val
+
+        print('# train data:', self.num_train)
+        print('# val data:', self.num_val)
 
         return train_dl, val_dl, num_train, num_val
     
@@ -136,8 +141,9 @@ class Trainer:
             
             # 지금까지 train_loss를 총합하였으니, 데이터 개수로 average. 
             train_loss /= float(self.num_train)
-            wandb.log({"train_loss": train_loss, 
-                    "lr": self.optimizer.param_groups[0]['lr']}, step=epoch)
+            wandb.log(
+                {"train_loss": train_loss, 
+                 "lr": self.optimizer.param_groups[0]['lr']}, step=epoch)
                 
             self.model.eval()
             val_loss = 0
@@ -183,17 +189,15 @@ class Trainer:
 
     def save_model(self, args, model, best):
         log_name = self.make_log_name(args)
-        model_name = args.model_name # kind of "all subjects" or "subject 1" ..
+        model_name = args.model_name # ex) "all_subjects_res18_mae_2"
         save_dir = os.path.join(args.save_path, model_name)
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
             
         if best:
-            torch.save(model.state_dict(), os.path.join(save_dir, log_name + "_best_model.pth"))
-            # wandb.save(os.path.join(save_dir, log_name + "_best_model.pth"))
+            torch.save(model.state_dict(), os.path.join(save_dir, "best_model.pth"))
         else:
-            torch.save(model.state_dict(), os.path.join(save_dir, log_name + "_last_model.pth"))
-            # wandb.save(os.path.join(save_dir, log_name + "_last_model.pth"))
+            torch.save(model.state_dict(), os.path.join(save_dir, "last_model.pth"))
 
 # def prepare_dataloader(self): 
     #     print('Pulling NSD webdataset data...')

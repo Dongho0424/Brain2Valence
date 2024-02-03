@@ -5,7 +5,6 @@ import os
 import pandas as pd
 from torch.utils.data import Dataset
 
-# TODO: *** sub별로 학습하고 eval 한 거 따로 해보기. ***
 # FIXME: train:val=8:2 로 수정하였지만, 처음 metadata에서 나누고 적합한 애들로 추리니까 실제로는 4.5:1로 나온다. 
 # TODO: 나이브하게 짠 것 바꾸면 좋겠다. 하지만 이건 후순위
 
@@ -28,7 +27,7 @@ class BrainValenceDataset(Dataset):
             self.metadata = self.metadata.sample(frac=1, random_state=fixed_suffle_seed).reset_index(drop=True)
             self.train_metadata = self.metadata.iloc[:int(len(self.metadata)*0.8)]
             self.val_metadata = self.metadata.iloc[int(len(self.metadata)*0.8):].reset_index(drop=True)
-            print(len(self.train_metadata), len(self.val_metadata))
+            # print(len(self.train_metadata), len(self.val_metadata))
 
             if split == 'train': 
                 self.metadata = self.train_metadata
@@ -51,14 +50,9 @@ class BrainValenceDataset(Dataset):
         # pre convert nsd data 
         # appropriately matching exact id of COCO image given metadata.csv
         self.coco_id = self.nsd2coco()
-                ##print(len(self.coco_id))
-                ##print(len(self.target_cocoid))
-                # display(self.coco_id)
-                # display(self.target_cocoid)
         ## use only joint and target(one person in picture) image
         # target_cocoid와 joint 한 것만 남긴다.
         isin = self.coco_id.isin(self.target_cocoid)
-                # display(isin, len(isin))
         self.coco_id = self.coco_id[isin]
         # metadata도 남길 애들만 남긴다.
         self.metadata = self.metadata[isin]

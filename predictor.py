@@ -14,16 +14,15 @@ class Predictor:
 
         self.test_dl, self.num_test = self.prepare_dataloader()
         self.set_wandb_config()
-        self.model: nn.Module = self.get_model()
+        self.model: nn.Module = self.load_model(args)
 
     def set_wandb_config(self):
         wandb_project = self.args.wandb_project
-        wandb_name = self.args.wandb_name
-        
-        print(f"wandb {wandb_project} run {wandb_name}")
+        model_name = self.args.model_name
+        print(f"wandb {wandb_project} run {model_name}")
         wandb.login(host='https://api.wandb.ai')
         wandb_config = {
-            "model_name": self.args.wandb_name,    
+            "model_name": self.args.model_name,    
             "batch_size": self.args.batch_size,
             "epochs": self.args.epochs,
             "num_test": self.num_test,
@@ -35,7 +34,7 @@ class Predictor:
         wandb.init(
             id = self.args.wandb_name,
             project=wandb_project,
-            name=wandb_name,
+            name=self.args.wandb_name,
             config=wandb_config,
             resume="allow",
         )
@@ -50,8 +49,11 @@ class Predictor:
         emotic_annotations = utils.get_emotic_data()
         nsd_df, target_cocoid = utils.get_NSD_data(emotic_annotations)
 
+        self.subjects = [1, 2, 5, 7] if self.args.all_subjects else [self.args.subj]
+        print('Train for current subjects:,', [f"subject{sub}" for sub in self.subjects])
+
         test_dl, num_test = utils.get_torch_dataloaders(
-            1, # 1 for test data loader
+            batch_size=1, # 1 for test data loader
             data_path = data_path,
             emotic_annotations=emotic_annotations,
             nsd_df=nsd_df,
@@ -63,12 +65,14 @@ class Predictor:
         self.test_dl = test_dl
         self.num_test = num_test
 
+        print('# test data:', self.num_test)
+
         return test_dl, num_test
     
-    def get_model(self) -> nn.Module :
+    def load_model(self, args) -> nn.Module :
         model = Brain2ValenceModel()
-        model_name = self.args.model_name # kind of "all subjects" or "subject 1" ..
-        best_path = os.path.join(self.args.save_path, model_name, self.make_log_name(self.args) + "_best_model.pth")
+        model_name = args.model_name # ex) "all_subjects_res18_mae_2"
+        best_path = os.path.join(self.args.save_path, model_name, "best_model.pth")
         model.load_state_dict(torch.load(best_path))
         return model
     
