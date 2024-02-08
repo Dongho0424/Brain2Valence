@@ -63,7 +63,7 @@ class Trainer:
             emotic_annotations=emotic_annotations,
             nsd_df=nsd_df,
             target_cocoid=target_cocoid,
-            mode='train',
+            mode='train', # train mode
             subjects=self.subjects
         )
 
@@ -78,7 +78,7 @@ class Trainer:
         return train_dl, val_dl, num_train, num_val
     
     def get_model(self):
-        model = Brain2ValenceModel()
+        model = Brain2ValenceModel(self.args.model)
         return model
 
     def get_optimizer(self):

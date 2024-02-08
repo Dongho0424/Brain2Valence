@@ -8,13 +8,23 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import mean_squared_error, r2_score
 
+# TODO: 1. ROI 추출한 15000개짜리 시그널에 MLP 붙여서 똑같이 regression
+# TODO: 2. Brainformer로 참고해서 regression
+# - subject-wise: subject1만 해보기
+# 그래도 안되면???
+# TODO: 3. valence를 3(0~3,3~7,7~10) or 5구간으로 나눠서 classification
+# dataloader에서 각 구간에 대해서 고르게 class를 뽑아주는 설정해서! weighted_random sampler
+# TODO: 4. float precision 32 -> 16으로 낮추고 batchsize 16 -> 32
+# using pytorch autocast
+# 3 -> 4 -> 1 -> 2
+
 class Predictor:
     def __init__(self, args):
         self.args = args
 
         self.test_dl, self.num_test = self.prepare_dataloader()
         self.set_wandb_config()
-        self.model: nn.Module = self.load_model(args)
+        self.model: nn.Module = self.load_model(args, use_best=True)
 
     def set_wandb_config(self):
         wandb_project = self.args.wandb_project
@@ -58,8 +68,8 @@ class Predictor:
             emotic_annotations=emotic_annotations,
             nsd_df=nsd_df,
             target_cocoid=target_cocoid,
-            mode='test',
-            subjects=[1, 2, 5, 7]
+            mode='test', # test mode
+            subjects=self.subjects
         )
 
         self.test_dl = test_dl
@@ -69,11 +79,15 @@ class Predictor:
 
         return test_dl, num_test
     
-    def load_model(self, args) -> nn.Module :
-        model = Brain2ValenceModel()
+    def load_model(self, args, use_best=True) -> nn.Module :
+        model = Brain2ValenceModel(self.args.model)
         model_name = args.model_name # ex) "all_subjects_res18_mae_2"
-        best_path = os.path.join(self.args.save_path, model_name, "best_model.pth")
-        model.load_state_dict(torch.load(best_path))
+        if use_best:
+            best_path = os.path.join(self.args.save_path, model_name, "best_model.pth")
+            model.load_state_dict(torch.load(best_path))
+        else:
+            last_path = os.path.join(self.args.save_path, model_name, "last_model.pth")
+            model.load_state_dict(torch.load(last_path))
         return model
     
     def predict(self):
@@ -104,10 +118,16 @@ class Predictor:
                 true_valences.append(valence.item())
                 pred_valences.append(pred_valence.item())
 
+        mae = np.mean(np.abs(np.array(true_valences) - np.array(pred_valences)))
         rmse = np.sqrt(mean_squared_error(true_valences, pred_valences))
         r2 = r2_score(true_valences, pred_valences)
-        print("RMSE: {:.4f}, R squared: {:.4f}".format(rmse, r2))
-        wandb.log({"RMSE": rmse, "r2_score": r2})
+        print("MAE: {:.4f}, RMSE: {:.4f}, R squared: {:.4f}".format(mae, rmse, r2))
+        print({"true_valence mean": np.mean(true_valences), "true_valence std": np.std(true_valences)})
+        print({"pred_valence mean": np.mean(pred_valences), "pred_valence std": np.std(pred_valences)})
+
+        wandb.log({"MAE": mae, "RMSE": rmse, "r2_score": r2})
+        wandb.log({"true_valence mean": np.mean(true_valences), "true_valence std": np.std(true_valences)})
+        wandb.log({"pred_valence mean": np.mean(pred_valences), "pred_valence std": np.std(pred_valences)})
 
         # Plot true vs pred valence 
         plt.scatter(true_valences, pred_valences)

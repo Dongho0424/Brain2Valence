@@ -34,7 +34,7 @@ def get_args():
     args.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
     args.add_argument("--weight-decay", type=float, default=1e-4, help="Weight decay")
     args.add_argument("--momentum", type=float, default=0.9, help="Momentum")
-    args.add_argument("--model", type=str, default="resnet18", help="Model")
+    args.add_argument("--model", type=str, default="resnet18", choices=["resnet18", "resnet50"], help="Model")
     args.add_argument("--num-workers", type=int, default=4, help="Number of workers")
     args.add_argument("--optimizer", type=str, default="adamw", help="Optimizer")
     args.add_argument("--scheduler", type=str, default="cosine", help="Scheduler")

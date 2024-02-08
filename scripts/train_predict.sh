@@ -10,13 +10,13 @@
 ## all subjects
 
 CUDA_VISIBLE_DEVICES=3 python3 main.py --exec_mode train --all-subjects \
- --wandb-name 0204_res18_mse_4 --model-name all_subjects_res18_mse_4 --wandb-project Brain2Valence --wandb-entity donghochoi\
- --epochs 70 --batch-size 16 --lr 1e-4 --weight-decay 0.1 --seed 42 --criterion mse & wait
+ --wandb-name 0204_resnet50_mae --model-name all_subjects_resnet50_mae --wandb-project Brain2Valence --wandb-entity donghochoi\
+ --model resnet50 --epochs 100 --batch-size 12 --lr 1e-4 --weight-decay 0.001 --seed 42 --criterion mae & wait
 
 CUDA_VISIBLE_DEVICES=3 python3 main.py --exec_mode predict --all-subjects \
- --wandb-name 0204_res18_mse_4_predict --model-name all_subjects_res18_mse_4 --wandb-project Brain2Valence --wandb-entity donghochoi & wait
+ --model resnet50 --wandb-name 0204_resnet50_mae --model-name all_subjects_resnet50_mae --wandb-project Brain2Valence --wandb-entity donghochoi & wait
 
-## for each subject
+# for each subject
 
 for subj in 1 2 5 7
 do
