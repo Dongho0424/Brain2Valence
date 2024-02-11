@@ -24,6 +24,7 @@ def get_args():
     # kind of all_subjects_res18_mae_01, subject1_res18_mae_01
     args.add_argument('--model-name', type=str, default='all_subjects',required=True, help='name of model')
     args.add_argument('--task-type', type=str, default="reg", choices=['reg', 'classif'], required=True, help='regression for valence(float), multiple classification for valence type')
+    args.add_argument('--data', type=str, default="brain3d", choices=['brain3d', 'roi'], required=True, help='data for our task. brain3d: whole brain 3d voxel, roi: well-picked brain 1d array. CAUTION: roi is only with particular subjects.')
     args.add_argument('--all-subjects', action='store_true', default=False, help='train or predict for all subjects')
     args.add_argument('--subj', type=int, default=1, choices=[1,2,5,7], help='train or predict for particular subject number')
     args.add_argument('--exec_mode', type=str, choices=['train', 'predict'], required=True, help='execution mode')
@@ -36,7 +37,7 @@ def get_args():
     args.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
     args.add_argument("--weight-decay", type=float, default=1e-4, help="Weight decay")
     args.add_argument("--momentum", type=float, default=0.9, help="Momentum")
-    args.add_argument("--model", type=str, default="resnet18", choices=["resnet18", "resnet50"], help="Model")
+    args.add_argument("--model", type=str, default="resnet18", choices=["resnet18", "resnet50", 'mlp'], help="Model. CAUTION: mlp is only for roi data")
     args.add_argument("--num-workers", type=int, default=4, help="Number of workers")
     args.add_argument("--optimizer", type=str, default="adamw", help="Optimizer")
     args.add_argument("--scheduler", type=str, default="cosine", help="Scheduler")

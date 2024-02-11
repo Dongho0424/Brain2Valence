@@ -33,6 +33,7 @@ class Predictor:
         print(f"wandb {wandb_project} run {model_name}")
         wandb.login(host='https://api.wandb.ai')
         wandb_config = {
+            "model": self.args.model,
             "model_name": self.args.model_name,    
             "batch_size": self.args.batch_size,
             "epochs": self.args.epochs,
@@ -72,7 +73,8 @@ class Predictor:
             mode='test', # test mode
             subjects=self.subjects,
             task_type=self.args.task_type,
-            num_classif=self.args.num_classif
+            num_classif=self.args.num_classif,
+            data=self.args.data,
         )
 
         self.test_dl = test_dl
@@ -83,7 +85,12 @@ class Predictor:
         return test_dl, num_test
     
     def load_model(self, args, use_best=True) -> nn.Module :
-        model = Brain2ValenceModel(self.args.model, self.args.task_type, self.args.num_classif)    
+        model = Brain2ValenceModel(
+            model_name=self.args.model,
+            task_type=self.args.task_type,
+            num_classif=self.args.num_classif,
+            subject=self.subjects,
+        )
         model_name = args.model_name # ex) "all_subjects_res18_mae_2"
         if use_best:
             best_path = os.path.join(self.args.save_path, model_name, "best_model.pth")

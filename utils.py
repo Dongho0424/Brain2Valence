@@ -115,15 +115,18 @@ def get_NSD_data(emotic_annotations):
 
 # currently, not used
 def get_target_valence(valence: torch.Tensor, task_type, num_classif):
-        """
-        Parameters
-        -----
+    """
+    Get the target valence based on the given valence tensor, task type, and number of classifications.
+
+    Args:
         valence: torch.Tensor, shape (B, 1)
         task_type: str, "reg" or "classif"
         num_classif: int, 3 or 5
 
-        Note
-        ------
+    Returns:
+        torch.Tensor: The target valence tensor.
+
+    Note:
         valence: each valence is 0~10 float value
         task_type:
         - regression: normalize to be 0~1
@@ -131,30 +134,29 @@ def get_target_valence(valence: torch.Tensor, task_type, num_classif):
             - 3 classes: each valence [0, 4], (4, 7], (7, 10] maps to 0, 1, 2
             - 5 classes: each valence (0, 2], (2, 4], (4, 6], (6, 8], (8, 10] maps to 0, 1, 2, 3, 4
 
-        return
-        ------
-        target_valence : torch.Tensor, shape (B, 1)
-            - as value(float): 0~1 for regression
-            - as label(int): 0~4(or 0~2) for classification
-        """
-        if task_type == 'reg':
-            # Normalize valence to be in the range 0~1 for regression
-            target_valence = valence / 10.0
-        elif task_type == 'classif':
-            if num_classif == 3:
-                # Map valence to 0, 1, 2 for 3 classes
-                boundaries = torch.tensor([0, 4, 7, 10]).float()
-                target_valence = torch.bucketize(valence, boundaries) - 1
-            elif num_classif == 5:
-                # Map valence to 0, 1, 2, 3, 4 for 5 classes
-                boundaries = torch.tensor([0, 2, 4, 6, 8, 10]).float()
-                target_valence = torch.bucketize(valence, boundaries) - 1
-            else:
-                raise ValueError("num_classif must be either 3 or 5.")
-        else:
-            raise ValueError("task_type must be either 'reg' or 'classif'.")
+    Raises:
+        ValueError: If the task_type is not 'reg' or 'classif'.
+        ValueError: If the num_classif is not 3 or 5.
+    """
         
-        return target_valence
+    if task_type == 'reg':
+        # Normalize valence to be in the range 0~1 for regression
+        target_valence = valence / 10.0
+    elif task_type == 'classif':
+        if num_classif == 3:
+            # Map valence to 0, 1, 2 for 3 classes
+            boundaries = torch.tensor([0, 4, 7, 10]).float()
+            target_valence = torch.bucketize(valence, boundaries) - 1
+        elif num_classif == 5:
+            # Map valence to 0, 1, 2, 3, 4 for 5 classes
+            boundaries = torch.tensor([0, 2, 4, 6, 8, 10]).float()
+            target_valence = torch.bucketize(valence, boundaries) - 1
+        else:
+            raise ValueError("num_classif must be either 3 or 5.")
+    else:
+        raise ValueError("task_type must be either 'reg' or 'classif'.")
+        
+    return target_valence
 
 def get_torch_dataloaders(
     batch_size,
@@ -166,7 +168,29 @@ def get_torch_dataloaders(
     subjects=[1, 2, 5, 7],
     task_type="reg",
     num_classif=3,
+    data: str = 'brain3d',
 ):
+    """
+    Get PyTorch data loaders for training, validation, or testing.
+
+    Args
+    -------
+        batch_size (int): The batch size for the data loaders.
+        data_path (str): The path to the data.
+        emotic_annotations (str): The path to the Emotic annotations.
+        nsd_df (str): The path to the NSD DataFrame.
+        target_cocoid (str): The target COCO ID.
+        mode (str, optional): The mode of the data loaders. Defaults to 'train'.
+        subjects (list, optional): The list of subject IDs. Defaults to [1, 2, 5, 7].
+        task_type (str, optional): The type of task. Defaults to "reg".
+        num_classif (int, optional): The number of classifications. Defaults to 3.
+        data (str, optional): The type of data. Choices of ['brain3d', 'roi']
+    Returns
+    -------
+        tuple: A tuple containing the data loaders and dataset sizes.
+            - If mode is 'train', returns (train_dl, val_dl, train_dataset_size, val_dataset_size).
+            - If mode is 'test', returns (test_dl, test_dataset_size).
+    """
     
     if mode == 'train':
 
@@ -178,7 +202,8 @@ def get_torch_dataloaders(
             target_cocoid=target_cocoid,
             subjects=subjects,
             task_type=task_type,
-            num_classif=num_classif
+            num_classif=num_classif,
+            data=data
         )
         val_dataset = BrainValenceDataset(
             data_path=data_path,
@@ -188,12 +213,15 @@ def get_torch_dataloaders(
             target_cocoid=target_cocoid,
             subjects=subjects,
             task_type=task_type,
-            num_classif=num_classif
+            num_classif=num_classif,
+            data=data
         )
 
-        # using WeightedRandomSampler 
-        weights = torch.Tensor(train_dataset.get_weights().values)
-        sampler = WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
+        sampler = None
+        # using WeightedRandomSampler at classif task
+        if task_type == "classif":
+            weights = torch.Tensor(train_dataset.get_weights().values)
+            sampler = WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
 
         train_dl = DataLoader(train_dataset, batch_size=batch_size, sampler=sampler)
         val_dl = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
@@ -210,15 +238,21 @@ def get_torch_dataloaders(
             target_cocoid=target_cocoid,
             subjects=subjects,
             task_type=task_type,
-            num_classif=num_classif
+            num_classif=num_classif,
+            data=data
         )        
 
-        # using WeightedRandomSampler 
-        # Originally, test dataset does not need to be weighted, but for the sake of class consistency
-        weights = torch.Tensor(train_dataset.get_weights().values)
-        sampler = WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
+        sampler = None
+        # using WeightedRandomSampler at classif task
+        # NOTE: Originally, test dataset does not need to be weighted, but for the sake of class consistency
+        if task_type == "classif":
+            weights = torch.Tensor(test_dataset.get_weights().values)
+            sampler = WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
 
         test_dl = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, sampler=sampler)
+
+        # temporarily check whether test dataset is well-distirbuted
+        verify_distribution(sampler, test_dataset)
    
         return test_dl, len(test_dataset)
     
@@ -250,3 +284,51 @@ def plot_valence_histogram(true_valences, pred_valences):
     
     wandb.log({"plot correctness per each valence": wandb.Image(plt)})
     plt.clf()
+
+def get_num_voxels(subject: int) -> int:
+    """
+    Get the number of voxels for a given subject.
+
+    Args:
+        subject (int): The subject number.
+
+    Returns:
+        int: The number of voxels for the given subject.
+    """
+    if subject == 1:
+        num_voxels = 15724
+    elif subject == 2:
+        num_voxels = 14278
+    elif subject == 3:
+        num_voxels = 15226
+    elif subject == 4:
+        num_voxels = 13153
+    elif subject == 5:
+        num_voxels = 13039
+    elif subject == 6:
+        num_voxels = 17907
+    elif subject == 7:
+        num_voxels = 12682
+    elif subject == 8:
+        num_voxels = 14386
+    return num_voxels
+
+
+from collections import Counter
+
+def verify_distribution(sampler, dataset):
+
+    # Create a list to store the targets
+    targets = []
+
+    # Iterate over the sampled data
+    for idx in sampler:
+        brain3d, target = dataset[idx]
+        targets.append(target)
+
+    # Count the number of instances of each class
+    class_counts = Counter(targets)
+
+    # Print the counts
+    for class_label, count in class_counts.items():
+        print(f"Class {class_label}: {count}")

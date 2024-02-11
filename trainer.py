@@ -24,6 +24,7 @@ class Trainer:
         print(f"wandb {wandb_project} run {model_name}")
         wandb.login(host='https://api.wandb.ai')
         wandb_config = {
+            "model": self.args.model,
             "model_name": self.args.model_name,    
             "batch_size": self.args.batch_size,
             "epochs": self.args.epochs,
@@ -64,7 +65,8 @@ class Trainer:
             mode='train', # train mode
             subjects=self.subjects,
             task_type=self.args.task_type,
-            num_classif=self.args.num_classif
+            num_classif=self.args.num_classif,
+            data=self.args.data,
         )
 
         self.train_dl = train_dl
@@ -78,7 +80,12 @@ class Trainer:
         return train_dl, val_dl, num_train, num_val
     
     def get_model(self):
-        model = Brain2ValenceModel(self.args.model, self.args.task_type, self.args.num_classif)
+        model = Brain2ValenceModel(
+            model_name=self.args.model,
+            task_type=self.args.task_type,
+            num_classif=self.args.num_classif,
+            subject=self.subjects,
+        )
         utils.print_model_info(model)
         return model
 
@@ -126,13 +133,14 @@ class Trainer:
 
             scaler = GradScaler()
 
-            for i, (brain_3d, valence) in tqdm(enumerate(self.train_dl)):
+            # data: brain3d or roi
+            for i, (data, valence) in tqdm(enumerate(self.train_dl)):
                 self.optimizer.zero_grad()
-                brain_3d = brain_3d.float().cuda()
+                data = data.float().cuda()
                 valence = valence.long().cuda()
                 
                 with autocast():
-                    pred_valence = self.model(brain_3d)
+                    pred_valence = self.model(data)
                     loss = self.criterion(pred_valence, valence)
                 # Scales loss and calls backward() to create scaled gradients
                 scaler.scale(loss).backward()
@@ -155,12 +163,11 @@ class Trainer:
             self.model.eval()
             val_loss = 0
             with torch.no_grad():
-                for i, (brain_3d, valence) in tqdm(enumerate(self.val_dl)):
-                    brain_3d = brain_3d.float().cuda()
+                for i, (data, valence) in tqdm(enumerate(self.val_dl)):
+                    data = data.float().cuda()
                     valence = valence.long().cuda()
 
-
-                    pred_valence = self.model(brain_3d)
+                    pred_valence = self.model(data)
                     loss = self.criterion(pred_valence, valence)
                     val_loss += loss.item() * self.args.batch_size # multiply by batch size
                 val_loss /= float(self.num_val)
@@ -225,7 +232,7 @@ class Trainer:
     #         num_data=,
     #         seed=self.args.seed,
     #         voxels_key='nsdgeneral.npy',
-    #         to_tuple=["voxels", "images", "coco", "brain_3d"],
+    #         to_tuple=["voxels", "images", "coco", "data"],
     #     )
         
     #     self.train_dl = train_dl

@@ -15,6 +15,7 @@ class BrainValenceDataset(Dataset):
                  subjects=[1, 2, 5, 7],
                  task_type="reg",
                  num_classif=3,
+                 data: str = 'brain3d'
                  ):
 
         self.data_path = data_path
@@ -22,6 +23,7 @@ class BrainValenceDataset(Dataset):
         self.subjects = subjects  # [1, 2, 5, 7]
         self.task_type = task_type
         self.num_classif = num_classif
+        self.data = data
 
         if split in ['train', 'val']:
             # firstly, concat boath train and val csv file corresponding to each subject
@@ -69,6 +71,10 @@ class BrainValenceDataset(Dataset):
         # metadata도 남길 애들만 남긴다.
         self.metadata = self.metadata[isin]
 
+        # Get valence from emotic_annotations corresponding to coco_id.
+        valence = [np.mean(self.emotic_annotations[coco_id]['valence']) for coco_id in self.coco_id]
+        self.metadata['valence'] = valence
+
         self.set_weights()
 
     def set_weights(self):
@@ -77,14 +83,9 @@ class BrainValenceDataset(Dataset):
 
         Goal
         -----
-        1. Get valence from emotic_annotations corresponding to coco_id.
-        2. Divide valence into intervals according to num_classif 
-        3. Get weight of each interval.
+        - Divide valence into intervals according to num_classif 
+        - Get weight of each interval.
         """
-        
-        # Get valence from emotic_annotations corresponding to coco_id.
-        valence = [np.mean(self.emotic_annotations[coco_id]['valence']) for coco_id in self.coco_id]
-        self.metadata['valence'] = valence
 
         # Divide valence into intervals according to num_classif
         bins = [0, 2, 4, 6, 8, 10] if self.num_classif == 5 else [0, 4, 7, 10]
@@ -107,14 +108,27 @@ class BrainValenceDataset(Dataset):
 
         sample = self.metadata.iloc[idx]
         split = self.get_split_info(sample['coco']) # 'coco' or 'voxel' or ... don't matter
-        brain_3d = torch.from_numpy(np.load(os.path.join(self.data_path, split, sample['mri']))) # (3, *, *, *)
-        brain_3d = torch.mean(brain_3d, dim=0) # (*, *, *)
-        brain_3d = self.reshape_brain3d(brain_3d) # (96, 96, 96)
+        
+        data = None
+
+        if self.data == 'brain3d':    
+            brain_3d = torch.from_numpy(np.load(os.path.join(self.data_path, split, sample['mri']))) # (3, *, *, *)
+            brain_3d = torch.mean(brain_3d, dim=0) # (*, *, *)
+            brain_3d = self.reshape_brain3d(brain_3d) # (96, 96, 96)
+
+            data = brain_3d
+        elif self.data == 'roi':
+            if len(self.subjects) > 1:
+                raise ValueError("Only one subject's roi data is available")
+            roi = torch.from_numpy(np.load(os.path.join(self.data_path, split, sample['voxel']))) # (3, *) 
+            roi = torch.mean(roi, dim=0) # (*, )
+
+            data = roi
         
         # regression task: normalized valence
         # classification task: valence_interval with respect to num_classif
         valence = (sample['valence'] / 10.0) if self.task_type == 'reg' else sample['valence_interval']
-        return brain_3d, valence
+        return data, valence
 
 
     def nsd2coco(self) -> pd.Series:
