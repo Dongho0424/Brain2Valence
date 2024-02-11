@@ -63,7 +63,7 @@ class Trainer:
             target_cocoid=target_cocoid,
             mode='train', # train mode
             subjects=self.subjects,
-            model_type=self.args.model_type,
+            task_type=self.args.task_type,
             num_classif=self.args.num_classif
         )
 
@@ -78,7 +78,7 @@ class Trainer:
         return train_dl, val_dl, num_train, num_val
     
     def get_model(self):
-        model = Brain2ValenceModel(self.args.model, self.args.model_type, self.args.num_classif)
+        model = Brain2ValenceModel(self.args.model, self.args.task_type, self.args.num_classif)
         utils.print_model_info(model)
         return model
 

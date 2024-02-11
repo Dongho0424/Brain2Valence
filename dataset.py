@@ -13,14 +13,14 @@ class BrainValenceDataset(Dataset):
                  nsd_df,
                  target_cocoid,
                  subjects=[1, 2, 5, 7],
-                 model_type="reg",
+                 task_type="reg",
                  num_classif=3,
                  ):
 
         self.data_path = data_path
         self.split = split  # train, val, test
         self.subjects = subjects  # [1, 2, 5, 7]
-        self.model_type = model_type
+        self.task_type = task_type
         self.num_classif = num_classif
 
         if split in ['train', 'val']:
@@ -113,7 +113,7 @@ class BrainValenceDataset(Dataset):
         
         # regression task: normalized valence
         # classification task: valence_interval with respect to num_classif
-        valence = (sample['valence'] / 10.0) if self.model_type == 'reg' else sample['valence_interval']
+        valence = (sample['valence'] / 10.0) if self.task_type == 'reg' else sample['valence_interval']
         return brain_3d, valence
 
 

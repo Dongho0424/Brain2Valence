@@ -4,13 +4,13 @@ from monai.networks.nets import resnet
 
 
 class Brain2ValenceModel(nn.Module):
-    def __init__(self, model_name: str = "resnet18", model_type: str = "reg", num_classif: int = 3):
+    def __init__(self, model_name: str = "resnet18", task_type: str = "reg", num_classif: int = 3):
         super().__init__()
 
         self.model_name = model_name
         print("current model backbone:", model_name)
 
-        num_classes = num_classif if model_type == "classif" else 1 # when regression, num_classes = 1
+        num_classes = num_classif if task_type == "classif" else 1 # when regression, num_classes = 1
 
         if model_name == "resnet18":
             self.model = resnet.resnet18(n_input_channels=1, num_classes=num_classes, feed_forward=True)

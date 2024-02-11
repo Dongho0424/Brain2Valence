@@ -114,18 +114,18 @@ def get_NSD_data(emotic_annotations):
     return df, target_cocoid
 
 # currently, not used
-def get_target_valence(valence: torch.Tensor, model_type, num_classif):
+def get_target_valence(valence: torch.Tensor, task_type, num_classif):
         """
         Parameters
         -----
         valence: torch.Tensor, shape (B, 1)
-        model_type: str, "reg" or "classif"
+        task_type: str, "reg" or "classif"
         num_classif: int, 3 or 5
 
         Note
         ------
         valence: each valence is 0~10 float value
-        model_type:
+        task_type:
         - regression: normalize to be 0~1
         - classification: 3 or 5 class classification
             - 3 classes: each valence [0, 4], (4, 7], (7, 10] maps to 0, 1, 2
@@ -137,10 +137,10 @@ def get_target_valence(valence: torch.Tensor, model_type, num_classif):
             - as value(float): 0~1 for regression
             - as label(int): 0~4(or 0~2) for classification
         """
-        if model_type == 'reg':
+        if task_type == 'reg':
             # Normalize valence to be in the range 0~1 for regression
             target_valence = valence / 10.0
-        elif model_type == 'classif':
+        elif task_type == 'classif':
             if num_classif == 3:
                 # Map valence to 0, 1, 2 for 3 classes
                 boundaries = torch.tensor([0, 4, 7, 10]).float()
@@ -152,7 +152,7 @@ def get_target_valence(valence: torch.Tensor, model_type, num_classif):
             else:
                 raise ValueError("num_classif must be either 3 or 5.")
         else:
-            raise ValueError("model_type must be either 'reg' or 'classif'.")
+            raise ValueError("task_type must be either 'reg' or 'classif'.")
         
         return target_valence
 
@@ -164,7 +164,7 @@ def get_torch_dataloaders(
     target_cocoid, 
     mode='train',
     subjects=[1, 2, 5, 7],
-    model_type="reg",
+    task_type="reg",
     num_classif=3,
 ):
     
@@ -177,7 +177,7 @@ def get_torch_dataloaders(
             nsd_df=nsd_df,
             target_cocoid=target_cocoid,
             subjects=subjects,
-            model_type=model_type,
+            task_type=task_type,
             num_classif=num_classif
         )
         val_dataset = BrainValenceDataset(
@@ -187,7 +187,7 @@ def get_torch_dataloaders(
             nsd_df=nsd_df,
             target_cocoid=target_cocoid,
             subjects=subjects,
-            model_type=model_type,
+            task_type=task_type,
             num_classif=num_classif
         )
 
@@ -209,7 +209,7 @@ def get_torch_dataloaders(
             nsd_df=nsd_df,
             target_cocoid=target_cocoid,
             subjects=subjects,
-            model_type=model_type,
+            task_type=task_type,
             num_classif=num_classif
         )        
 

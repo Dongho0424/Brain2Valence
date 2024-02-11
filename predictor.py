@@ -71,7 +71,7 @@ class Predictor:
             target_cocoid=target_cocoid,
             mode='test', # test mode
             subjects=self.subjects,
-            model_type=self.args.model_type,
+            task_type=self.args.task_type,
             num_classif=self.args.num_classif
         )
 
@@ -83,7 +83,7 @@ class Predictor:
         return test_dl, num_test
     
     def load_model(self, args, use_best=True) -> nn.Module :
-        model = Brain2ValenceModel(self.args.model, self.args.model_type, self.args.num_classif)    
+        model = Brain2ValenceModel(self.args.model, self.args.task_type, self.args.num_classif)    
         model_name = args.model_name # ex) "all_subjects_res18_mae_2"
         if use_best:
             best_path = os.path.join(self.args.save_path, model_name, "best_model.pth")
@@ -104,10 +104,10 @@ class Predictor:
         self.model.cuda()
         self.model.eval()
 
-        if self.args.model_type == "reg":
+        if self.args.task_type == "reg":
             self.predict_regression()
 
-        elif self.args.model_type == "classif":
+        elif self.args.task_type == "classif":
             self.predict_classification()
 
     def predict_classification(self):
