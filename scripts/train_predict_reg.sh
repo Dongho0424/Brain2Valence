@@ -11,10 +11,11 @@
 
 CUDA_VISIBLE_DEVICES=3 python3 main.py --exec_mode train --all-subjects \
  --wandb-name 0204_resnet50_mae --model-name all_subjects_resnet50_mae --wandb-project Brain2Valence --wandb-entity donghochoi\
- --model resnet50 --epochs 100 --batch-size 12 --lr 1e-4 --weight-decay 0.001 --seed 42 --criterion mae & wait
+ --model resnet50 --task-type reg --data brain3d --epochs 100 --batch-size 12 --lr 1e-4 --weight-decay 0.001 --seed 42 --criterion mae & wait
 
 CUDA_VISIBLE_DEVICES=3 python3 main.py --exec_mode predict --all-subjects \
- --model resnet50 --wandb-name 0204_resnet50_mae --model-name all_subjects_resnet50_mae --wandb-project Brain2Valence --wandb-entity donghochoi & wait
+ --wandb-name 0204_resnet50_mae --model-name all_subjects_resnet50_mae --wandb-project Brain2Valence --wandb-entity donghochoi \
+ --model resnet50 --task-type reg --data brain3d & wait
 
 # for each subject
 

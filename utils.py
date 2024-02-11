@@ -192,10 +192,10 @@ def get_torch_dataloaders(
         )
 
         # using WeightedRandomSampler 
-        train_weights = torch.Tensor(train_dataset.get_weights().values)
-        train_sampler = WeightedRandomSampler(weights=train_weights, num_samples=len(train_weights), replacement=True)
+        weights = torch.Tensor(train_dataset.get_weights().values)
+        sampler = WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
 
-        train_dl = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler)
+        train_dl = DataLoader(train_dataset, batch_size=batch_size, sampler=sampler)
         val_dl = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
         return train_dl, val_dl, len(train_dataset), len(val_dataset)
@@ -213,7 +213,12 @@ def get_torch_dataloaders(
             num_classif=num_classif
         )        
 
-        test_dl = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+        # using WeightedRandomSampler 
+        # Originally, test dataset does not need to be weighted, but for the sake of class consistency
+        weights = torch.Tensor(train_dataset.get_weights().values)
+        sampler = WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
+
+        test_dl = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, sampler=sampler)
    
         return test_dl, len(test_dataset)
     
