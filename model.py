@@ -4,19 +4,20 @@ from monai.networks.nets import resnet
 
 
 class Brain2ValenceModel(nn.Module):
-    def __init__(self, model: str = "resnet18"):
+    def __init__(self, model_name: str = "resnet18", model_type: str = "reg", num_classif: int = 3):
         super().__init__()
 
-        print("current model backbone:", model)
+        self.model_name = model_name
+        print("current model backbone:", model_name)
 
-        if model == "resnet18":
-            self.model = resnet.resnet18(n_input_channels=1, num_classes=1, feed_forward=True)
-        elif model == "resnet50":
-            self.model = resnet.resnet50(n_input_channels=1, num_classes=1, feed_forward=True)
+        num_classes = num_classif if model_type == "classif" else 1 # when regression, num_classes = 1
+
+        if model_name == "resnet18":
+            self.model = resnet.resnet18(n_input_channels=1, num_classes=num_classes, feed_forward=True)
+        elif model_name == "resnet50":
+            self.model = resnet.resnet50(n_input_channels=1, num_classes=num_classes, feed_forward=True)
         else:
-            raise NotImplementedError(f"model {model} is not implemented")
-        
-        self.model_name = model
+            raise NotImplementedError(f"model {model_name} is not implemented")
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """

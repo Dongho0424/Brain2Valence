@@ -6,12 +6,30 @@ import random
 import os
 import pandas as pd
 import math
-import webdataset as wds
-import braceexpand
 from dataset import BrainValenceDataset
 import scipy
+import matplotlib.pyplot as plt
+import wandb
+from torch.utils.data import DataLoader
+from torch.utils.data.sampler import WeightedRandomSampler
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#TODO: label 수를 낮춰서 negative, neutral, positive 감정 label로 다운시키고, 그것을 classification 하는 task도 생각할 수 있겠다.
+#TODO: brain을 다 쓰지 말고, 감정에 잘 반응하는 특정 ROI가 있다.
+#TODO: NSD -> 3T로 넘어 가는게 허들. 3T에서 처리를 잘 할 수 있는 디코더를 만들어야 함. 유의미하다. whole brain을 잘 해야하낟.
+# 스피치, 동영상에서도 디코딩을 잘 해내야하는 것. 
+# Question: NSD dataset의 사진을 보고, 우리가 크게 3개의 감정을 나눠서 분류하는 classificaiton task를 할 수 있을까?
+# - 아무튼 NSD의 사진을 보고 image 감정 라벨링을 우리가 하는 것이지.
+#TODO: Emoset dataset의 여러 감정 노테이션을 크게 3개의 감정으로 나눠서 그것을 분류하는 classification task를 할 수 있을까?
+def print_model_info(model):
+    # total_params = 0
+    print("Model's net structure:")
+    print("Model name:", model.__class__.__name__)
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            print(f"Layer: {name}, Type: {type(param.data).__name__}, Parameters: {param.numel()}")
+            # total_params += param.numel()
+    # print(f"\nTotal trainable parameters: {total_params}")
 
 def set_seed(args):
     torch.manual_seed(args.seed)
@@ -36,6 +54,13 @@ def seed_everything(seed=0, cudnn_deterministic=True):
         print('Note: not using cudnn.deterministic')
 
 def get_emotic_data() -> dict:
+    """
+    return 
+    ------
+    emotic_annotations
+    1. get EMOTIC data from COCO dataset
+    2. zip its cocoid with emotic_annotations(valence, arousal, dominance)
+    """
     file_name_emotic_annot = './emotic_annotations.mat'
 
     ## get EMOTIC data
@@ -62,6 +87,15 @@ def get_emotic_data() -> dict:
     return emotic_annotations
 
 def get_NSD_data(emotic_annotations):
+    """
+    return
+    ------
+    NSD data and target_cocoid
+    - target_cocoid: 
+        1. equally in both NSD, EMOTIC and COCO dataset 
+        2. has only one person in the image
+        3. has valence annotation
+    """
     # out: target_cocoid
     file_name_nsd_stim = './nsd_stim_info_merged.csv'
 
@@ -78,133 +112,49 @@ def get_NSD_data(emotic_annotations):
     test_cocoid = nsd_cocoid[np.isin(nsd_cocoid, target_cocoid) &  nsd_isshared]
 
     return df, target_cocoid
-    
-# def get_dataloaders(
-#     batch_size,
-#     target_cocoid,
-#     image_var='images',
-#     num_devices=None,
-#     train_data_urls=None,
-#     val_data_urls=None,
-#     test_data_urls=None,
-#     num_data=None,
-#     seed=0,
-#     voxels_key="nsdgeneral.npy",
-#     to_tuple=["voxels", "images", "coco", "brain_3d"],
-# ):
-#     """
-#     train_data_urls: array of train data url
-#     val_data_urls: array of val data url
-#     test_data_urls: array of test data url
-#     target_cocoid(coco id from both NSD & EMOTIC dataset)
-    
-#     out: three dataloaders that all returns (brain3d, valence)
-#     """
 
-#     print("Getting dataloaders...")
-#     assert image_var == 'images'
-    
-#     def my_split_by_node(urls):
-#         return urls
-    
-#     # data_url = list(braceexpand.braceexpand(data_url))
+# currently, not used
+def get_target_valence(valence: torch.Tensor, model_type, num_classif):
+        """
+        Parameters
+        -----
+        valence: torch.Tensor, shape (B, 1)
+        model_type: str, "reg" or "classif"
+        num_classif: int, 3 or 5
 
-#     if num_devices is None:
-#         num_devices = torch.cuda.device_count()
-    
+        Note
+        ------
+        valence: each valence is 0~10 float value
+        model_type:
+        - regression: normalize to be 0~1
+        - classification: 3 or 5 class classification
+            - 3 classes: each valence [0, 4], (4, 7], (7, 10] maps to 0, 1, 2
+            - 5 classes: each valence (0, 2], (2, 4], (4, 6], (6, 8], (8, 10] maps to 0, 1, 2, 3, 4
+
+        return
+        ------
+        target_valence : torch.Tensor, shape (B, 1)
+            - as value(float): 0~1 for regression
+            - as label(int): 0~4(or 0~2) for classification
+        """
+        if model_type == 'reg':
+            # Normalize valence to be in the range 0~1 for regression
+            target_valence = valence / 10.0
+        elif model_type == 'classif':
+            if num_classif == 3:
+                # Map valence to 0, 1, 2 for 3 classes
+                boundaries = torch.tensor([0, 4, 7, 10]).float()
+                target_valence = torch.bucketize(valence, boundaries) - 1
+            elif num_classif == 5:
+                # Map valence to 0, 1, 2, 3, 4 for 5 classes
+                boundaries = torch.tensor([0, 2, 4, 6, 8, 10]).float()
+                target_valence = torch.bucketize(valence, boundaries) - 1
+            else:
+                raise ValueError("num_classif must be either 3 or 5.")
+        else:
+            raise ValueError("model_type must be either 'reg' or 'classif'.")
         
-#     print(f"in utils.py: num_devices: {num_devices}")
-#     global_batch_size = batch_size * num_devices
-#     num_batches = math.floor(num_data / global_batch_size)
-#     # num_worker_batches = math.floor(num_batches / num_workers)
-#     # if num_worker_batches == 0: num_worker_batches = 1
-
-#     print("\nnum_data",num_data)
-#     print("global_batch_size",global_batch_size)
-#     print("batch_size",batch_size)
-#     print("num_batches",num_batches)
-
-#     def filter_by_cocoId(sample):
-#         # sample: ("voxels", "images", "cocoid", "brain_3d")
-#         _, _, cocoid, _ = sample
-#         cocoid = cocoid[-1]
-#         return (cocoid in target_cocoid)
-
-#     def map_brain_valence_pair(sample):
-#         # sample: ("voxels", "images", "cocoid", "brain_3d")
-#         # add corresponding valence
-#         # make sure all brain_3d shape is same
-#         # out: brain_3d, valence
-
-#         _, _, cocoid, brain_3d = sample
-#         cocoid = cocoid[-1]
-#         valence = get_emotic_annot(cocoid, 'valence')
-#         brain_3d = np.mean(brain_3d, axis=0) # (*, *, *)
-#         brain_3d = reshape_brain3d(brain_3d, target_shape=(96, 96, 96)) # (96, 96, 96)
-        
-#         return brain_3d, valence
-    
-#     ### train ###
-    
-#     train_target_urls = []
-#     for url in train_data_urls:
-#         train_target_urls += list(braceexpand.braceexpand(url))
-#     print("len(train_target_urls):", len(train_target_urls))
-
-#     # for url in data_urls:
-#     train_dataset = wds.WebDataset(train_target_urls, resampled=True, nodesplitter=my_split_by_node)\
-#         .shuffle(500, initial=500, rng=random.Random(seed))\
-#         .decode("torch")\
-#         .rename(images="jpg;png", voxels=voxels_key, trial="trial.npy", coco="coco73k.npy", reps="num_uniques.npy", brain_3d = "wholebrain_3d.npy")\
-#         .to_tuple(*to_tuple)\
-#         .select(filter_by_cocoId)\
-#         .map(map_brain_valence_pair)\
-#         .batched(batch_size, partial=True)\
-#         # .with_epoch(num_worker_batches)
-
-#     train_dl = torch.utils.data.DataLoader(train_dataset, batch_size=None, num_workers=1, shuffle=False)       
-
-#     ### val ###
-    
-#     val_target_urls = []
-#     for url in val_data_urls:
-#         val_target_urls += list(braceexpand.braceexpand(url))
-#     print("len(val_target_urls):", len(val_target_urls))
-
-#     # for url in data_urls:
-#     val_dataset = wds.WebDataset(val_target_urls, resampled=True, nodesplitter=my_split_by_node)\
-#         .shuffle(500, initial=500, rng=random.Random(seed))\
-#         .decode("torch")\
-#         .rename(images="jpg;png", voxels=voxels_key, trial="trial.npy", coco="coco73k.npy", reps="num_uniques.npy", brain_3d = "wholebrain_3d.npy")\
-#         .to_tuple(*to_tuple)\
-#         .select(filter_by_cocoId)\
-#         .map(map_brain_valence_pair)\
-#         .batched(batch_size, partial=True)\
-#         # .with_epoch(num_worker_batches)
-
-#     val_dl = torch.utils.data.DataLoader(val_dataset, batch_size=None, num_workers=1, shuffle=False)       
-
-#     ### test ###
-    
-#     test_target_urls = []
-#     for url in test_data_urls:
-#         test_target_urls += list(braceexpand.braceexpand(url))
-#     print("len(test_target_urls):", len(test_target_urls))
-
-#     # for url in data_urls:
-#     test_dataset = wds.WebDataset(test_target_urls, resampled=True, nodesplitter=my_split_by_node)\
-#         .shuffle(500, initial=500, rng=random.Random(seed))\
-#         .decode("torch")\
-#         .rename(images="jpg;png", voxels=voxels_key, trial="trial.npy", coco="coco73k.npy", reps="num_uniques.npy", brain_3d = "wholebrain_3d.npy")\
-#         .to_tuple(*to_tuple)\
-#         .select(filter_by_cocoId)\
-#         .map(map_brain_valence_pair)\
-#         .batched(batch_size, partial=True)\
-#         # .with_epoch(num_worker_batches)
-
-#     test_dl = torch.utils.data.DataLoader(test_dataset, batch_size=None, num_workers=1, shuffle=False)       
-    
-#     return train_dl, val_dl, test_dl
+        return target_valence
 
 def get_torch_dataloaders(
     batch_size,
@@ -213,8 +163,11 @@ def get_torch_dataloaders(
     nsd_df,
     target_cocoid, 
     mode='train',
-    subjects=[1, 2, 5, 7]
+    subjects=[1, 2, 5, 7],
+    model_type="reg",
+    num_classif=3,
 ):
+    
     if mode == 'train':
 
         train_dataset = BrainValenceDataset(
@@ -223,7 +176,9 @@ def get_torch_dataloaders(
             emotic_annotations=emotic_annotations,
             nsd_df=nsd_df,
             target_cocoid=target_cocoid,
-            subjects=subjects
+            subjects=subjects,
+            model_type=model_type,
+            num_classif=num_classif
         )
         val_dataset = BrainValenceDataset(
             data_path=data_path,
@@ -231,11 +186,17 @@ def get_torch_dataloaders(
             emotic_annotations=emotic_annotations,
             nsd_df=nsd_df,
             target_cocoid=target_cocoid,
-            subjects=subjects
+            subjects=subjects,
+            model_type=model_type,
+            num_classif=num_classif
         )
 
-        train_dl = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-        val_dl = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+        # using WeightedRandomSampler 
+        train_weights = torch.Tensor(train_dataset.get_weights().values)
+        train_sampler = WeightedRandomSampler(weights=train_weights, num_samples=len(train_weights), replacement=True)
+
+        train_dl = DataLoader(train_dataset, batch_size=batch_size, sampler=train_sampler)
+        val_dl = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
         return train_dl, val_dl, len(train_dataset), len(val_dataset)
  
@@ -247,13 +208,40 @@ def get_torch_dataloaders(
             emotic_annotations=emotic_annotations,
             nsd_df=nsd_df,
             target_cocoid=target_cocoid,
-            subjects=subjects
-        )
-        
+            subjects=subjects,
+            model_type=model_type,
+            num_classif=num_classif
+        )        
 
-        test_dl = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+        test_dl = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
    
         return test_dl, len(test_dataset)
     
     else: 
         TypeError("Wrong mode for dataloader")
+
+def plot_valence_histogram(true_valences, pred_valences):
+    '''
+    Plot histogram of true and predicted valences per each true valence
+    In order to see there is meaningful difference between true valence section
+    '''
+    # Calculate correctness
+    correctness_count = {}
+
+    for true, pred in zip(true_valences, pred_valences):
+        if true in correctness_count:
+            if true == pred:
+                correctness_count[true] += 1
+        else:
+            correctness_count[true] = 1 if true == pred else 0
+    correctness_percentage = {true: (count / true_valences.count(true)) * 100 for true, count in correctness_count.items()}
+
+    plt.bar(correctness_percentage.keys(), correctness_percentage.values(), align='center', alpha=0.5)
+    plt.xlabel('True Valence')
+    plt.ylabel('Correctness (%)')
+    plt.xticks(range(max(true_valences) + 1))
+    plt.yticks(range(0, 101, 10))
+    plt.title('Correctness per Each Valence')
+    
+    wandb.log({"plot correctness per each valence": wandb.Image(plt)})
+    plt.clf()

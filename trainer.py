@@ -64,7 +64,9 @@ class Trainer:
             nsd_df=nsd_df,
             target_cocoid=target_cocoid,
             mode='train', # train mode
-            subjects=self.subjects
+            subjects=self.subjects,
+            model_type=self.args.model_type,
+            num_classif=self.args.num_classif
         )
 
         self.train_dl = train_dl
@@ -78,7 +80,8 @@ class Trainer:
         return train_dl, val_dl, num_train, num_val
     
     def get_model(self):
-        model = Brain2ValenceModel(self.args.model)
+        model = Brain2ValenceModel(self.args.model, self.args.model_type, self.args.num_classif)
+        utils.print_model_info(model)
         return model
 
     def get_optimizer(self):
@@ -92,7 +95,7 @@ class Trainer:
             optimizer = torch.optim.AdamW(params, lr=self.args.lr, weight_decay=self.args.weight_decay)
         return optimizer
 
-    def get_scheduler(self,):
+    def get_scheduler(self):
         if self.args.scheduler == "step":
             scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=30, gamma=0.1)
         elif self.args.scheduler == "cosine":
@@ -105,6 +108,8 @@ class Trainer:
             criterion = nn.MSELoss()
         elif self.args.criterion == "mae":
             criterion = nn.L1Loss()
+        elif self.args.criterion == "ce":
+            criterion = nn.CrossEntropyLoss()
         return criterion
     
     def train(self):
@@ -123,21 +128,21 @@ class Trainer:
             for i, (brain_3d, valence) in tqdm(enumerate(self.train_dl)):
                 self.optimizer.zero_grad()
                 brain_3d = brain_3d.float().cuda()
-                valence = valence.float().cuda()
-                # valence 0~1로 normalize
-                # 해석할 때는 10 곱해서 해석하는 것.
-                valence /= 10.0
-                pred_valence = self.model(brain_3d)
-                # print("brain_3d.shape:", brain_3d.shape)
-                # print("valence.shape:", valence.shape)
-                # print("pred_valence.shape:", pred_valence.shape)
+                valence = valence.long().cuda()
                 
+                # valence = utils.get_target_valence(
+                #     valence,
+                #     self.args.model_type,
+                #     self.args.num_classif
+                # )
+                pred_valence = self.model(brain_3d)
+
                 loss = self.criterion(pred_valence, valence)
                 loss.backward()
                 self.optimizer.step()
                 # loss.item(): batch의 average loss
                 # batch size 곱해주면 total loss
-                train_loss += loss.item() * brain_3d.shape[0] # multiply by batch size
+                train_loss += loss.item() * self.args.batch_size # multiply by batch size
             
             # 지금까지 train_loss를 총합하였으니, 데이터 개수로 average. 
             train_loss /= float(self.num_train)
@@ -149,13 +154,16 @@ class Trainer:
             val_loss = 0
             for i, (brain_3d, valence) in tqdm(enumerate(self.val_dl)):
                 brain_3d = brain_3d.float().cuda()
-                valence = valence.float().cuda()
+                valence = valence.long().cuda()
 
-                # valence 0~1로 normalize
-                valence /= 10.0
+                # valence = utils.get_target_valence(
+                #     valence,
+                #     self.args.model_type,
+                #     self.args.num_classif
+                # )
                 pred_valence = self.model(brain_3d)
                 loss = self.criterion(pred_valence, valence)
-                val_loss += loss.item() * brain_3d.shape[0] # multiply by batch size
+                val_loss += loss.item() * self.args.batch_size # multiply by batch size
             val_loss /= float(self.num_val)
             wandb.log({"val_loss": val_loss}, step=epoch)
             
