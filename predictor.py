@@ -13,9 +13,9 @@ from sklearn.metrics import mean_squared_error, r2_score
 # TODO: 2. Brainformer로 참고해서 regression
 # - subject-wise: subject1만 해보기
 # 그래도 안되면???
-# TODO: 3. valence를 3(0~4,4~7,7~10) or 5구간으로 나눠서 classification
+# \TODO: 3. valence를 3(0~4,4~7,7~10) or 5구간으로 나눠서 classification
 # dataloader에서 각 구간에 대해서 고르게 class를 뽑아주는 설정해서! weighted_random sampler
-# TODO: 4. float precision 32 -> 16으로 낮추고 batchsize 16 -> 32
+# \TODO: 4. float precision 32 -> 16으로 낮추고 batchsize 16 -> 32
 # using pytorch autocast
 # 3 -> 4 -> 1 -> 2
 
@@ -108,7 +108,7 @@ class Predictor:
             self.predict_regression()
 
         elif self.args.model_type == "classif":
-            self.predict_classification()()
+            self.predict_classification()
 
     def predict_classification(self):
         test_loss = 0.0
@@ -122,11 +122,7 @@ class Predictor:
             for i, (brain_3d, valence) in enumerate(self.test_dl):
                 brain_3d = brain_3d.float().cuda()
                 valence = valence.long().cuda()
-                # target_valence = utils.get_target_valence(
-                #         valence,
-                #         self.args.model_type,
-                #         self.args.num_classif
-                #     )
+                
                 output = self.model(brain_3d)
                 # (B, num_classif)
                 loss = criterion(output, valence)
@@ -155,11 +151,7 @@ class Predictor:
             for i, (brain_3d, valence) in enumerate(self.test_dl):
                 brain_3d = brain_3d.float().cuda()
                 valence = valence.float().cuda()
-                # target_valence = utils.get_target_valence(
-                #         valence,
-                #         self.args.model_type,
-                #         self.args.num_classif
-                #     )
+                
                 pred_valence = self.model(brain_3d)
 
                 true_valences.append(valence.item())
