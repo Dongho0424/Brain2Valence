@@ -29,7 +29,13 @@ class Brain2ValenceModel(nn.Module):
             assert len(subject) == 1, "mlp model is only for subject specific model"
 
             features = utils.get_num_voxels(subject[-1])
-            self.model = nn.Linear(features, num_classes)
+            self.model = nn.Sequential(
+                nn.Linear(features, 4096),
+                nn.Linear(4096, 1024),
+                nn.Linear(1024, 512),
+                nn.Linear(512, 128),
+                nn.Linear(128, num_classes),
+            )
         else:
             raise NotImplementedError(f"model {model_name} is not implemented")
 
