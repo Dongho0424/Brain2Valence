@@ -46,6 +46,9 @@ def get_args():
     args.add_argument("--n_layers", type=int, default=1, help="Number of layers")
     args.add_argument("--mode", type=str, default="valence", help="Mode", choices=["both", "valence"])
     args.add_argument("--mix_dataset", action="store_true", help="Mix dataset", default=False)
+
+    # for predict
+    args.add_argument("--best", action="store_true", help="Use best model", default=False)
     
     # # split arguments with respect to execution mode
     # train_args = args.add_argument_group('train')

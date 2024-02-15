@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import mean_squared_error, r2_score
 
-# TODO: 1. ROI 추출한 15000개짜리 시그널에 MLP 붙여서 똑같이 regression
+# \TODO: 1. ROI 추출한 15000개짜리 시그널에 MLP 붙여서 똑같이 regression
 # - subject-wise: subject1만 해보기
 # TODO: 2. Brainformer로 참고해서 regression
 # - subject-wise: subject1만 해보기
@@ -25,7 +25,7 @@ class Predictor:
 
         self.test_dl, self.num_test = self.prepare_dataloader()
         self.set_wandb_config()
-        self.model: nn.Module = self.load_model(args, use_best=True)
+        self.model: nn.Module = self.load_model(args, use_best=self.args.best)
 
     def set_wandb_config(self):
         wandb_project = self.args.wandb_project

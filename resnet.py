@@ -4,6 +4,18 @@ import torch.nn.functional as F
 from functools import partial
 from os.path import join, expanduser
 
+#TODO: dataloader 등 뿌려주는 거 다시 봐야함. (디버깅)
+#TODO: Resnet 이걸로 바꾸기. 
+#TODO: 3d mri mean -> random idx
+
+## EMOTIC dataset
+## NSD와 겹치는 데이터로
+#TODO later 1. 이미지 -> 감정 예측
+#TODO later 2. 이미지 + 뇌사진 -> 감정 예측 (멀티 모달)
+# 이미지 -> cnn -> 512
+# roi -> mlp -> 512
+# 1024 -> mlp -> classification 
+
 __all__ = [
     'ResNet', 'resnet10', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
     'resnet152', 'resnet200'

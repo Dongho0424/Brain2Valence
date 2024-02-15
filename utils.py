@@ -249,11 +249,11 @@ def get_torch_dataloaders(
             weights = torch.Tensor(test_dataset.get_weights().values)
             sampler = WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
 
+            # temporarily check whether test dataset is well-distirbuted
+            verify_distribution(sampler, test_dataset)
+
         test_dl = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, sampler=sampler)
 
-        # temporarily check whether test dataset is well-distirbuted
-        verify_distribution(sampler, test_dataset)
-   
         return test_dl, len(test_dataset)
     
     else: 

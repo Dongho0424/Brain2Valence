@@ -7,7 +7,8 @@ CUDA_VISIBLE_DEVICES=3 python3 main.py --exec_mode train --all-subjects \
 
 CUDA_VISIBLE_DEVICES=3 python3 main.py --exec_mode predict --all-subjects \
  --wandb-name 0211_classif3_2 --model-name classif3_resnet18_2 --wandb-project Brain2Valence --wandb-entity donghochoi \
- --model resnet18 --task-type classif --num-classif 3 --data brain3d & wait
+ --model resnet18 --task-type classif --num-classif 3 --data brain3d \
+ --best & wait
 
 # number of classes: 5
 CUDA_VISIBLE_DEVICES=3 python3 main.py --exec_mode train --all-subjects \
@@ -16,4 +17,5 @@ CUDA_VISIBLE_DEVICES=3 python3 main.py --exec_mode train --all-subjects \
 
 CUDA_VISIBLE_DEVICES=3 python3 main.py --exec_mode predict --all-subjects \
  --wandb-name 0211_classif5_1 --model-name classif5_resnet18_1 --wandb-project Brain2Valence --wandb-entity donghochoi \
- --model resnet18 --task-type classif --num-classif 5 --data brain3d & wait
+ --model resnet18 --task-type classif --num-classif 5 --data brain3d \
+ --best & wait

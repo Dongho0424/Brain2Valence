@@ -15,7 +15,8 @@ CUDA_VISIBLE_DEVICES=3 python3 main.py --exec_mode train --all-subjects \
 
 CUDA_VISIBLE_DEVICES=3 python3 main.py --exec_mode predict --all-subjects \
  --wandb-name 0204_resnet50_mae --model-name all_subjects_resnet50_mae --wandb-project Brain2Valence --wandb-entity donghochoi \
- --model resnet50 --task-type reg --data brain3d & wait
+ --model resnet50 --task-type reg --data brain3d \
+ --best & wait
 
 # for each subject
 
@@ -26,5 +27,6 @@ CUDA_VISIBLE_DEVICES=3 python3 main.py --exec_mode train --subj ${subj} \
  --epochs 70 --batch-size 16 --lr 1e-4 --weight-decay 0.1 --seed 42 --criterion mse & wait
 
 CUDA_VISIBLE_DEVICES=3 python3 main.py --exec_mode predict --subj ${subj} \
- --wandb-name 0204_subject${subj}_res18_mse --model-name subject${subj}_res18_mse --wandb-project Brain2Valence --wandb-entity donghochoi & wait
+ --wandb-name 0204_subject${subj}_res18_mse --model-name subject${subj}_res18_mse --wandb-project Brain2Valence --wandb-entity donghochoi \
+ --best & wait
 done
