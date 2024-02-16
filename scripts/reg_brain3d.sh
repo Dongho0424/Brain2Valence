@@ -1,32 +1,25 @@
-# for learning_rate in 1e-4 3e-4 
-# do
-# CUDA_VISIBLE_DEVICES=3 python3 main.py --exec_mode train --wandb-name res18_mae_02 --model-name all_subjects --wandb-project Brain2Valence --wandb-entity donghochoi\
-#  --epochs 100 --batch-size 24 --lr $learning_rate --weight-decay 0.1 --seed 42 --criterion mae & wait
-
-# CUDA_VISIBLE_DEVICES=3 python3 main.py --exec_mode predict --wandb-name res18_mae_02_predict \
-#     --model-name all_subjects --wandb-project Brain2Valence --wandb-entity donghochoi & wait
-# done 
-
 ## all subjects
 
-CUDA_VISIBLE_DEVICES=3 python3 main.py --exec_mode train --all-subjects \
- --wandb-name 0204_resnet50_mae --model-name all_subjects_resnet50_mae --wandb-project Brain2Valence --wandb-entity donghochoi\
- --model resnet50 --task-type reg --data brain3d --epochs 100 --batch-size 12 --lr 1e-4 --weight-decay 0.001 --seed 42 --criterion mae & wait
+# CUDA_VISIBLE_DEVICES=3 python3 main.py --exec_mode train --all-subjects \
+#  --wandb-log --wandb-name 0215_resnet18_mae_1 --model-name all_subjects_resnet18_mae_1 --wandb-project Brain2Valence --wandb-entity donghochoi\
+#  --model resnet18 --task-type reg --data brain3d --epochs 100 --batch-size 32 --lr 1e-5 --weight-decay 0.001 --seed 42 --criterion mae & wait
 
-CUDA_VISIBLE_DEVICES=3 python3 main.py --exec_mode predict --all-subjects \
- --wandb-name 0204_resnet50_mae --model-name all_subjects_resnet50_mae --wandb-project Brain2Valence --wandb-entity donghochoi \
- --model resnet50 --task-type reg --data brain3d \
- --best & wait
+# CUDA_VISIBLE_DEVICES=3 python3 main.py --exec_mode predict --all-subjects \
+#  --wandb-log --wandb-name 0215_resnet18_mae_1 --model-name all_subjects_resnet18_mae_1 --wandb-project Brain2Valence --wandb-entity donghochoi \
+#  --model resnet18 --task-type reg --data brain3d \
+#  --best & wait
+
 
 # for each subject
 
-for subj in 1 2 5 7
+for subj in 1 #2 5 7
 do
 CUDA_VISIBLE_DEVICES=3 python3 main.py --exec_mode train --subj ${subj} \
- --wandb-name 0204_subject${subj}_res18_mse --model-name subject${subj}_res18_mse --wandb-project Brain2Valence --wandb-entity donghochoi\
- --epochs 70 --batch-size 16 --lr 1e-4 --weight-decay 0.1 --seed 42 --criterion mse & wait
+ --wandb-log --wandb-name 0216_subject${subj}_res18_2 --model-name subject${subj}_res18_2 --wandb-project Brain2Valence --wandb-entity donghochoi\
+ --model resnet18 --task-type reg --data brain3d --epochs 100 --batch-size 32 --lr 1e-5 --weight-decay 0.001 --seed 42 --criterion mae & wait
 
 CUDA_VISIBLE_DEVICES=3 python3 main.py --exec_mode predict --subj ${subj} \
- --wandb-name 0204_subject${subj}_res18_mse --model-name subject${subj}_res18_mse --wandb-project Brain2Valence --wandb-entity donghochoi \
+ --wandb-log --wandb-name 0216_subject${subj}_res18_2 --model-name subject${subj}_res18_2 --wandb-project Brain2Valence --wandb-entity donghochoi \
+ --model resnet18 --task-type reg --data brain3d \
  --best & wait
 done

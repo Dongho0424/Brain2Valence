@@ -3,6 +3,7 @@ import torch.nn as nn
 import utils
 from typing import List
 from monai.networks.nets import resnet
+from resnet import ResNetwClf
 
 class Brain2ValenceModel(nn.Module):
     def __init__(self,
@@ -19,12 +20,14 @@ class Brain2ValenceModel(nn.Module):
         # when regression, num_classes = 1
         num_classes = num_classif if task_type == "classif" else 1
 
-        if model_name == "resnet18":
-            self.model = resnet.resnet18(
-                n_input_channels=1, num_classes=num_classes, feed_forward=True)
+        if model_name == "resnet18" or model_name == "resnet50":
+            self.model = ResNetwClf(backbone_type='resnet_18', num_classes=num_classes)
+            # self.model = resnet.resnet18(
+            #     n_input_channels=1, num_classes=num_classes, feed_forward=True)
         elif model_name == "resnet50":
-            self.model = resnet.resnet50(
-                n_input_channels=1, num_classes=num_classes, feed_forward=True)
+            self.model = ResNetwClf(backbone_type='resnet_50', num_classes=num_classes)
+            # self.model = resnet.resnet50(
+            #     n_input_channels=1, num_classes=num_classes, feed_forward=True)
         elif model_name == "mlp":
             assert len(subject) == 1, "mlp model is only for subject specific model"
 

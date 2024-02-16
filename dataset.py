@@ -72,7 +72,7 @@ class BrainValenceDataset(Dataset):
         self.metadata = self.metadata[isin]
 
         # Get valence from emotic_annotations corresponding to coco_id.
-        valence = [np.mean(self.emotic_annotations[coco_id]['valence']) for coco_id in self.coco_id]
+        valence = [self.emotic_annotations[coco_id]['valence'][-1] for coco_id in self.coco_id]
         self.metadata['valence'] = valence
 
         self.set_weights()
@@ -93,6 +93,7 @@ class BrainValenceDataset(Dataset):
         
         # Get num classes of each interval.
         class_sample_counts = self.metadata['valence_interval'].value_counts().sort_index()
+        # print(class_sample_counts)
 
         # save weight of each interval, which is the invert of count per sample.
         class_weights = 1. / class_sample_counts
@@ -106,6 +107,8 @@ class BrainValenceDataset(Dataset):
 
     def __getitem__(self, idx):
 
+        repeat_index = idx % 3
+
         sample = self.metadata.iloc[idx]
         split = self.get_split_info(sample['coco']) # 'coco' or 'voxel' or ... don't matter
         
@@ -113,7 +116,8 @@ class BrainValenceDataset(Dataset):
 
         if self.data == 'brain3d':    
             brain_3d = torch.from_numpy(np.load(os.path.join(self.data_path, split, sample['mri']))) # (3, *, *, *)
-            brain_3d = torch.mean(brain_3d, dim=0) # (*, *, *)
+            # brain_3d = torch.mean(brain_3d, dim=0) # (*, *, *)
+            brain_3d = brain_3d[repeat_index]
             brain_3d = self.reshape_brain3d(brain_3d) # (96, 96, 96)
 
             data = brain_3d
@@ -121,13 +125,26 @@ class BrainValenceDataset(Dataset):
             if len(self.subjects) > 1:
                 raise ValueError("Only one subject's roi data is available")
             roi = torch.from_numpy(np.load(os.path.join(self.data_path, split, sample['voxel']))) # (3, *) 
-            roi = torch.mean(roi, dim=0) # (*, )
+            # roi = torch.mean(roi, dim=0) # (*, )
+            roi = roi[repeat_index]
 
             data = roi
         
         # regression task: normalized valence
         # classification task: valence_interval with respect to num_classif
         valence = (sample['valence'] / 10.0) if self.task_type == 'reg' else sample['valence_interval']
+
+        # ### ADD NEW THINGS ###
+
+        # coco_id = self.coco_id.iloc[idx]
+
+        # image = Image.open(os.path.join(self.data_path, split, sample['img']))
+        # image = transforms.ToTensor()(image)
+
+        # return data, valence, coco_id, image
+    
+        # ### ADD NEW THINGS ###
+    
         return data, valence
 
 
@@ -137,13 +154,7 @@ class BrainValenceDataset(Dataset):
 
         nsd_id = self.metadata['coco'].apply(lambda x: np.load(
             os.path.join(self.data_path, self.get_split_info(x), x))[-1])
-        coco_id = []
-        isin = nsd_id.isin(self.nsd_df['nsdId'])
-        for i, x in nsd_id.items():
-            if isin[i]:
-                coco_id.append(self.nsd_df.loc[x, 'cocoId'])
-
-        coco_id = pd.Series(coco_id)
+        coco_id = nsd_id.apply(lambda x: self.nsd_df.loc[x, 'cocoId'])
 
         return coco_id
 
