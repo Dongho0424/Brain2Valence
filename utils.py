@@ -178,6 +178,7 @@ def get_torch_dataloaders(
     task_type="reg",
     num_classif=3,
     data: str = 'brain3d',
+    use_sampler=False,
 ):
     """
     Get PyTorch data loaders for training, validation, or testing.
@@ -194,6 +195,7 @@ def get_torch_dataloaders(
         task_type (str, optional): The type of task. Defaults to "reg".
         num_classif (int, optional): The number of classifications. Defaults to 3.
         data (str, optional): The type of data. Choices of ['brain3d', 'roi']
+        use_sampler (bool, optional): Whether to use the weighted random sampler. Defaults to False.
     Returns
     -------
         tuple: A tuple containing the data loaders and dataset sizes.
@@ -212,7 +214,8 @@ def get_torch_dataloaders(
             subjects=subjects,
             task_type=task_type,
             num_classif=num_classif,
-            data=data
+            data=data,
+            use_sampler=use_sampler
         )
         val_dataset = BrainValenceDataset(
             data_path=data_path,
@@ -223,12 +226,13 @@ def get_torch_dataloaders(
             subjects=subjects,
             task_type=task_type,
             num_classif=num_classif,
-            data=data
+            data=data,
+            use_sampler=use_sampler
         )
 
         sampler = None
         # using WeightedRandomSampler at classif task
-        if task_type == "classif":
+        if task_type == "classif" and use_sampler:
             weights = torch.Tensor(train_dataset.get_weights().values)
             sampler = WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
 
@@ -248,13 +252,14 @@ def get_torch_dataloaders(
             subjects=subjects,
             task_type=task_type,
             num_classif=num_classif,
-            data=data
+            data=data,
+            use_sampler=use_sampler
         )        
 
         sampler = None
         # using WeightedRandomSampler at classif task
         # NOTE: Originally, test dataset does not need to be weighted, but for the sake of class consistency
-        if task_type == "classif":
+        if task_type == "classif" and use_sampler:
             weights = torch.Tensor(test_dataset.get_weights().values)
             sampler = WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
 

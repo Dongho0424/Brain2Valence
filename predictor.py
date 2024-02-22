@@ -140,6 +140,11 @@ class Predictor:
         # data: brain3d or roi
         with torch.no_grad():
             for i, (data, valence, coco_id, img) in enumerate(self.test_dl):
+                if i == 0:
+                    print("data type:", self.args.data)
+                    print("task type:", self.args.task_type)
+                    print("data shape:", data.shape)
+                    print("valence shape:", valence.shape)
                 data = data.float().cuda()
                 valence = valence.long().cuda()
 
@@ -173,6 +178,11 @@ class Predictor:
         # data: brain3d or roi
         with torch.no_grad():
             for i, (data, valence, coco_id, img) in enumerate(self.test_dl):
+                if i == 0:
+                    print("data type:", self.args.data)
+                    print("task type:", self.args.task_type)
+                    print("data shape:", data.shape)
+                    print("valence shape:", valence.shape)
                 data = data.float().cuda()
                 valence = valence.float().cuda()
                 

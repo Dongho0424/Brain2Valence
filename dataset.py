@@ -5,6 +5,7 @@ import pandas as pd
 from torch.utils.data import Dataset
 from PIL import Image
 from torchvision import transforms
+from sklearn.model_selection import train_test_split
 
 class BrainValenceDataset(Dataset):
     def __init__(self,
@@ -16,7 +17,8 @@ class BrainValenceDataset(Dataset):
                  subjects=[1, 2, 5, 7],
                  task_type="reg",
                  num_classif=3,
-                 data: str = 'brain3d'
+                 data: str = 'brain3d',
+                 use_sampler: bool = False
                  ):
 
         self.data_path = data_path
@@ -38,10 +40,8 @@ class BrainValenceDataset(Dataset):
             # then split the metadata into train and test with 80/20 split
             # randomly shuffle with fixed seed in order to get same splitted index whenever call this dataset.
             fixed_suffle_seed = 0
-            self.metadata = self.metadata.sample(
-                frac=1, random_state=fixed_suffle_seed).reset_index(drop=True)
-            self.train_metadata = self.metadata.iloc[:int(len(self.metadata)*0.8)]
-            self.val_metadata = self.metadata.iloc[int(len(self.metadata)*0.8):].reset_index(drop=True)
+            # Split the data into train and validation sets in an 8:2 ratio
+            self.train_metadata, self.val_metadata = train_test_split(self.metadata, test_size=0.2, random_state=fixed_suffle_seed)
 
             if split == 'train':
                 self.metadata = self.train_metadata
@@ -76,7 +76,16 @@ class BrainValenceDataset(Dataset):
         valence = [self.emotic_annotations[coco_id]['valence'][-1] for coco_id in self.coco_id]
         self.metadata['valence'] = valence
 
-        self.set_weights()
+        # Divide valence into intervals according to num_classif
+        bins = []
+        if self.num_classif == 3: bins = [0, 4, 7, 10]
+        elif self.num_classif == 5: bins = [0, 2, 4, 6, 8, 10]
+        elif self.num_classif == 10: bins = [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] # -1 for making valence interval 1 to 10
+        else: ValueError("num_classif should be one of 3, 5, 10")
+        self.metadata['valence_interval'] = pd.cut(self.metadata['valence'], bins=bins, labels=False, include_lowest=True)
+
+        if use_sampler:
+            self.set_weights()
 
     def set_weights(self):
         """
@@ -85,12 +94,7 @@ class BrainValenceDataset(Dataset):
         Goal
         -----
         - Divide valence into intervals according to num_classif 
-        - Get weight of each interval.
         """
-
-        # Divide valence into intervals according to num_classif
-        bins = [0, 2, 4, 6, 8, 10] if self.num_classif == 5 else [0, 4, 7, 10]
-        self.metadata['valence_interval'] = pd.cut(self.metadata['valence'], bins=bins, labels=False, include_lowest=True)
         
         # Get num classes of each interval.
         class_sample_counts = self.metadata['valence_interval'].value_counts().sort_index()

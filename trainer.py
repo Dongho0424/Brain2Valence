@@ -67,6 +67,7 @@ class Trainer:
             task_type=self.args.task_type,
             num_classif=self.args.num_classif,
             data=self.args.data,
+            use_sampler=self.args.sampler,
         )
 
         print('# train data:', num_train)
@@ -130,6 +131,11 @@ class Trainer:
 
             # data: brain3d or roi
             for i, (data, valence, coco_id, img) in tqdm(enumerate(self.train_dl)):
+                if i == 0:
+                    print("data type:", self.args.data)
+                    print("task type:", self.args.task_type)
+                    print("data shape:", data.shape)
+                    print("valence shape:", valence.shape)
                 self.optimizer.zero_grad()
                 data = data.float().cuda()
                 valence = valence.long().cuda()
@@ -159,6 +165,11 @@ class Trainer:
             val_loss = 0
             with torch.no_grad():
                 for i, (data, valence, coco_id, img) in tqdm(enumerate(self.val_dl)):
+                    if i == 0:
+                        print("data type:", self.args.data)
+                        print("task type:", self.args.task_type)
+                        print("data shape:", data.shape)
+                        print("valence shape:", valence.shape)
                     data = data.float().cuda()
                     valence = valence.long().cuda()
 

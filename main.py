@@ -63,7 +63,8 @@ def get_args():
     # reg_args.add_argument()
 
     classif_args = args.add_argument_group('classification')
-    classif_args.add_argument("--num-classif", type=int, default=3, choices=[3, 5], help="Number of classification type. 3 for 0~4, 4~7, 7~10, 5 for 0~2, 2~4, 4~6, 6~8, 8~10")
+    classif_args.add_argument("--num-classif", type=int, default=3, choices=[3, 5, 10], help="Number of classification type. \n3 for 0~4, 4~7, 7~10, 5 for 0~2, 2~4, 4~6, 6~8, 8~10, \n10 for 10 class clf. similar to regression")
+    classif_args.add_argument("--sampler", action="strore_true", help="Use weighted random sampler", default=False)
     
     args = args.parse_args()
 
