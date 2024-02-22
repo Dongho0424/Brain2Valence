@@ -58,7 +58,7 @@ class Trainer:
 
         train_dl, val_dl, num_train, num_val = utils.get_torch_dataloaders(
             batch_size=self.args.batch_size,
-            data_path = data_path,
+            data_path=data_path,
             emotic_annotations=emotic_annotations,
             nsd_df=nsd_df,
             target_cocoid=target_cocoid,
@@ -69,13 +69,8 @@ class Trainer:
             data=self.args.data,
         )
 
-        self.train_dl = train_dl
-        self.val_dl = val_dl
-        self.num_train = num_train
-        self.num_val = num_val
-
-        print('# train data:', self.num_train)
-        print('# val data:', self.num_val)
+        print('# train data:', num_train)
+        print('# val data:', num_val)
 
         return train_dl, val_dl, num_train, num_val
     
@@ -134,7 +129,7 @@ class Trainer:
             scaler = GradScaler()
 
             # data: brain3d or roi
-            for i, (data, valence) in tqdm(enumerate(self.train_dl)):
+            for i, (data, valence, coco_id, img) in tqdm(enumerate(self.train_dl)):
                 self.optimizer.zero_grad()
                 data = data.float().cuda()
                 valence = valence.long().cuda()
@@ -163,7 +158,7 @@ class Trainer:
             self.model.eval()
             val_loss = 0
             with torch.no_grad():
-                for i, (data, valence) in tqdm(enumerate(self.val_dl)):
+                for i, (data, valence, coco_id, img) in tqdm(enumerate(self.val_dl)):
                     data = data.float().cuda()
                     valence = valence.long().cuda()
 

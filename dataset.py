@@ -3,7 +3,8 @@ import numpy as np
 import os
 import pandas as pd
 from torch.utils.data import Dataset
-
+from PIL import Image
+from torchvision import transforms
 
 class BrainValenceDataset(Dataset):
     def __init__(self,
@@ -134,19 +135,12 @@ class BrainValenceDataset(Dataset):
         # classification task: valence_interval with respect to num_classif
         valence = (sample['valence'] / 10.0) if self.task_type == 'reg' else sample['valence_interval']
 
-        # ### ADD NEW THINGS ###
+        coco_id = self.coco_id.iloc[idx]
 
-        # coco_id = self.coco_id.iloc[idx]
+        image = Image.open(os.path.join(self.data_path, split, sample['img']))
+        image = transforms.ToTensor()(image)
 
-        # image = Image.open(os.path.join(self.data_path, split, sample['img']))
-        # image = transforms.ToTensor()(image)
-
-        # return data, valence, coco_id, image
-    
-        # ### ADD NEW THINGS ###
-    
-        return data, valence
-
+        return data, valence, coco_id, image
 
     def nsd2coco(self) -> pd.Series:
         # metadata.csv의 coco column은 nsd_id이므로, 이를 `nsd_stim_info_merged.csv` 를 읽어온 후,

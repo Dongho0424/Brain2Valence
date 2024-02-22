@@ -18,6 +18,7 @@ from sklearn.metrics import mean_squared_error, r2_score
 # \TODO: 4. float precision 32 -> 16으로 낮추고 batchsize 16 -> 32
 # using pytorch autocast
 # 3 -> 4 -> 1 -> 2
+# TODO: 5. valence 반올림해서 10개 classification 으로 바꾸기
 
 class Predictor:
     def __init__(self, args):
@@ -77,10 +78,21 @@ class Predictor:
             data=self.args.data,
         )
 
-        self.test_dl = test_dl
-        self.num_test = num_test
+        # for debugging
+        # train_dl, val_dl, num_train, num_val = utils.get_torch_dataloaders(
+        #     batch_size=1, # 1 for test data loader
+        #     data_path = data_path,
+        #     emotic_annotations=emotic_annotations,
+        #     nsd_df=nsd_df,
+        #     target_cocoid=target_cocoid,
+        #     mode='train', # test mode
+        #     subjects=self.subjects,
+        #     task_type=self.args.task_type,
+        #     num_classif=self.args.num_classif,
+        #     data=self.args.data,
+        # )
 
-        print('# test data:', self.num_test)
+        print('# test data:', num_test)
 
         return test_dl, num_test
     
@@ -125,19 +137,23 @@ class Predictor:
         true_valences = []
         pred_valences = []
 
+        # data: brain3d or roi
         with torch.no_grad():
-            for i, (brain_3d, valence) in enumerate(self.test_dl):
-                brain_3d = brain_3d.float().cuda()
+            for i, (data, valence, coco_id, img) in enumerate(self.test_dl):
+                data = data.float().cuda()
                 valence = valence.long().cuda()
-                
-                output = self.model(brain_3d)
+
+                output = self.model(data)
+
                 # (B, num_classif)
                 loss = criterion(output, valence)
                 # select the index of the highest value
                 # (B, num_classif) -> (B, 1)   
                 pred_valence = output.argmax(dim=1, keepdim=True)
 
-                test_loss += loss.item() * brain_3d.shape[0]
+                test_loss += loss.item()
+                print("g.t. valence:", valence)
+                print("pred_valence:", pred_valence)
                 correct += pred_valence.eq(valence.view_as(pred_valence)).sum().item()
 
                 true_valences.append(valence.item())
@@ -154,12 +170,16 @@ class Predictor:
         true_valences = []
         pred_valences = []
 
+        # data: brain3d or roi
         with torch.no_grad():
-            for i, (brain_3d, valence) in enumerate(self.test_dl):
-                brain_3d = brain_3d.float().cuda()
+            for i, (data, valence, coco_id, img) in enumerate(self.test_dl):
+                data = data.float().cuda()
                 valence = valence.float().cuda()
                 
-                pred_valence = self.model(brain_3d)
+                pred_valence = self.model(data)
+
+                print("g.t. valence:", valence)  
+                print("predicted valence:", pred_valence)  
 
                 true_valences.append(valence.item())
                 pred_valences.append(pred_valence.item())

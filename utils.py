@@ -61,26 +61,35 @@ def get_emotic_data() -> dict:
     1. get EMOTIC data from COCO dataset
     2. zip its cocoid with emotic_annotations(valence, arousal, dominance)
     """
-    file_name_emotic_annot = './emotic_annotations.mat'
+    file_name_emotic_annot = '../emotic_annotations.mat'
 
     ## get EMOTIC data
     data = scipy.io.loadmat(file_name_emotic_annot, simplify_cells=True)
     emotic_data = data['train'] + data['test'] + data['val']
     emotic_coco_data = [x for x in emotic_data if x['original_database']['name']=='mscoco']
     coco_id = [x['original_database']['info']['image_id'] for x in emotic_coco_data]
-    annotations = [x['person'] for x in emotic_coco_data] 
-    emotic_annotations = []
-    for annot in annotations:
-        annot = [annot] if type(annot)==dict else annot
 
-        valence = []; arousal = []; dominance = []
-        for person in annot:
-            person = person['annotations_continuous']
-            person = [person] if type(person)==dict else person
-            valence += [np.mean([x['valence'] for x in person])]
-            arousal += [np.mean([x['arousal'] for x in person])]
-            dominance += [np.mean([x['dominance'] for x in person])]
-        emotic_annotations += [{ 'valence':valence, 'arousal':arousal, 'dominance':dominance}]
+    emotic_annotations = []
+    for sample in emotic_coco_data:
+        person = [sample['person']] if isinstance(sample['person'], dict) else sample['person']
+
+        valences = []
+        arousals = []
+        dominances = []
+        for p in person:
+            emotions = p['annotations_continuous']
+            emotions = [emotions] if isinstance(emotions, dict) else emotions
+
+            if len(emotions) != 1: # 한 사진에 대해서 여러명이 annotate한 경우
+                valences.append(p['combined_continuous']['valence'])
+                arousals.append(p['combined_continuous']['arousal'])
+                dominances.append(p['combined_continuous']['dominance'])
+            else:
+                valences.append(p['annotations_continuous']['valence'])
+                arousals.append(p['annotations_continuous']['arousal'])
+                dominances.append(p['annotations_continuous']['dominance'])
+
+        emotic_annotations += [{ 'valence':valences, 'arousal':arousals, 'dominance':dominances}]
 
     emotic_annotations = dict(zip(coco_id, emotic_annotations))
 
