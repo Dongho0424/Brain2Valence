@@ -61,7 +61,7 @@ def get_emotic_data() -> dict:
     1. get EMOTIC data from COCO dataset
     2. zip its cocoid with emotic_annotations(valence, arousal, dominance)
     """
-    file_name_emotic_annot = '../emotic_annotations.mat'
+    file_name_emotic_annot = './emotic_annotations.mat'
 
     ## get EMOTIC data
     data = scipy.io.loadmat(file_name_emotic_annot, simplify_cells=True)

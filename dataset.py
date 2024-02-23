@@ -80,7 +80,7 @@ class BrainValenceDataset(Dataset):
         bins = []
         if self.num_classif == 3: bins = [0, 4, 7, 10]
         elif self.num_classif == 5: bins = [0, 2, 4, 6, 8, 10]
-        elif self.num_classif == 10: bins = [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] # -1 for making valence interval 1 to 10
+        elif self.num_classif == 10: bins = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         else: ValueError("num_classif should be one of 3, 5, 10")
         self.metadata['valence_interval'] = pd.cut(self.metadata['valence'], bins=bins, labels=False, include_lowest=True)
 

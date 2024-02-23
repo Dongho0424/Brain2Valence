@@ -91,6 +91,35 @@
             "env": {
                 "CUDA_VISIBLE_DEVICES": "3"
             }
+        },
+        {
+            "name": "classfi10, roi: train",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--exec_mode", "train",
+                "--subj", "1",
+                "--wandb-log",
+                "--wandb-name", "0223_subject1_classif10_mlp",
+                "--model-name", "0223_subject1_classif10_mlp",
+                "--wandb-project", "Brain2Valence",
+                "--wandb-entity", "donghochoi",
+                "--model", "mlp",
+                "--task-type", "classif",
+                "--num-classif", "10",
+                "--data", "roi",
+                "--epochs", "70",
+                "--batch-size", "32",
+                "--lr", "1e-4",
+                "--weight-decay", "0.001",
+                "--seed", "42",
+                "--criterion", "ce"
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "3"
+            }
         }
     ]
 }

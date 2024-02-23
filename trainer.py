@@ -142,6 +142,9 @@ class Trainer:
                 
                 with autocast():
                     pred_valence = self.model(data)
+                    # Reshape data and target to handle varying batch sizes
+                    pred_valence = pred_valence.view(data.size(0), -1)
+                    valence = valence.view(valence.size(0))
                     loss = self.criterion(pred_valence, valence)
                 # Scales loss and calls backward() to create scaled gradients
                 scaler.scale(loss).backward()
