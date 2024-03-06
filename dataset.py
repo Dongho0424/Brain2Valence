@@ -27,6 +27,7 @@ class BrainValenceDataset(Dataset):
         self.task_type = task_type
         self.num_classif = num_classif
         self.data = data
+        self.use_sampler = use_sampler
 
         if split in ['train', 'val']:
             # firstly, concat boath train and val csv file corresponding to each subject
@@ -84,7 +85,7 @@ class BrainValenceDataset(Dataset):
         else: ValueError("num_classif should be one of 3, 5, 10")
         self.metadata['valence_interval'] = pd.cut(self.metadata['valence'], bins=bins, labels=False, include_lowest=True)
 
-        if use_sampler:
+        if self.use_sampler:
             self.set_weights()
 
     def set_weights(self):
@@ -105,6 +106,8 @@ class BrainValenceDataset(Dataset):
         self.metadata['weight'] = self.metadata['valence_interval'].apply(lambda x: class_weights[x])
 
     def get_weights(self):
+        assert self.use_sampler, "You should set use_sampler to True in order to use this method"
+        
         return self.metadata['weight']
 
     def __len__(self):

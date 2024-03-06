@@ -34,32 +34,25 @@ class Brain2ValenceModel(nn.Module):
 
             features = utils.get_num_voxels(subject[-1])
             self.lin1 = nn.Sequential(
-                nn.Linear(features, 4096, bias=False),
-                nn.LayerNorm(4096), 
+                nn.Linear(features, 4096),
+                nn.BatchNorm1d(4096), 
                 nn.GELU(),
                 nn.Dropout(0.5),
             )
-            self.mlp = nn.ModuleList([
-                nn.Sequential(
-                    nn.Linear(4096, 4096, bias=False),
-                    nn.LayerNorm(4096), 
-                    nn.GELU(),
-                    nn.Dropout(0.15),
-                ),
-                nn.Sequential(
-                    nn.Linear(4096, 1024, bias=False),
-                    nn.LayerNorm(1024), 
-                    nn.GELU(),
-                    nn.Dropout(0.15),
-                ),
-                nn.Sequential(
-                    nn.Linear(1024, 128, bias=False),
-                    nn.LayerNorm(128), 
-                    nn.GELU(),
-                    nn.Dropout(0.15),
-                )
-                ])
-            self.lin2 = nn.Linear(128, num_classes, bias=False)
+            # self.mlp = nn.ModuleList([
+            #     nn.Sequential(
+            #         nn.Linear(4096, 4096),
+            #         nn.BatchNorm1d(4096), 
+            #         nn.GELU(),
+            #         nn.Dropout(0.15),
+            #     ) for _ in range(3)
+            # ])
+            self.last = nn.Sequential(
+                nn.Linear(4096, 768),
+                nn.BatchNorm1d(768), 
+                nn.GELU(),
+                nn.Linear(768, num_classes),
+            )
         else:
             raise NotImplementedError(f"model {model_name} is not implemented")
 
@@ -77,10 +70,10 @@ class Brain2ValenceModel(nn.Module):
             valence = self.res_model(x)  # (B, 1) or (B, num_classif)
         elif self.model_name == "mlp":
             x = self.lin1(x)
-            residual = x
-            for block in range(len(self.mlp)):
-                x = self.mlp[block](x)
-                if block == 0: 
-                    x += residual   
-            valence = self.lin2(x)
+            # residual = x
+            # for block in range(len(self.mlp)):
+            #     x = self.mlp[block](x)
+            #     x += residual   
+            #     residual = x
+            valence = self.last(x)
         return valence.float().squeeze(dim=-1)

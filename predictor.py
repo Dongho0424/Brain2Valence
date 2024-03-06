@@ -18,7 +18,7 @@ from sklearn.metrics import mean_squared_error, r2_score
 # \TODO: 4. float precision 32 -> 16으로 낮추고 batchsize 16 -> 32
 # using pytorch autocast
 # 3 -> 4 -> 1 -> 2
-# TODO: 5. valence 반올림해서 10개 classification 으로 바꾸기
+# \TODO: 5. valence 반올림해서 10개 classification 으로 바꾸기
 
 class Predictor:
     def __init__(self, args):
@@ -76,10 +76,12 @@ class Predictor:
             task_type=self.args.task_type,
             num_classif=self.args.num_classif,
             data=self.args.data,
+            use_sampler=self.args.sampler,
         )
 
         # for debugging
-        # train_dl, val_dl, num_train, num_val = utils.get_torch_dataloaders(
+        # test_dl, _, num_test, _ = utils.get_torch_dataloaders(
+        # # _, test_dl, _, num_test = utils.get_torch_dataloaders(
         #     batch_size=1, # 1 for test data loader
         #     data_path = data_path,
         #     emotic_annotations=emotic_annotations,
@@ -151,6 +153,9 @@ class Predictor:
                 output = self.model(data)
 
                 # (B, num_classif)
+                # Reshape data and target to handle varying batch sizes
+                output = output.view(data.size(0), -1)
+                valence = valence.view(valence.size(0))
                 loss = criterion(output, valence)
                 # select the index of the highest value
                 # (B, num_classif) -> (B, 1)   
@@ -170,6 +175,15 @@ class Predictor:
         wandb.log({"test_loss": test_loss, "accuracy": 100. * correct / self.num_test})
 
         utils.plot_valence_histogram(true_valences, pred_valences)
+
+        # scatter pred and g.t. valence when only 10 class classfication
+        if self.args.num_classif == 10:
+            plt.scatter(true_valences, pred_valences)
+            plt.xlabel("True valence")
+            plt.ylabel("Pred valence")
+            plt.plot([0, 10], [0, 10], color='red', linestyle='--')
+            wandb.log({"plot true valence vs pred valence": wandb.Image(plt)})
+            plt.clf()
 
     def predict_regression(self):
         true_valences = []
@@ -205,7 +219,7 @@ class Predictor:
         wandb.log({"true_valence mean": np.mean(true_valences), "true_valence std": np.std(true_valences)})
         wandb.log({"pred_valence mean": np.mean(pred_valences), "pred_valence std": np.std(pred_valences)})
 
-            # Plot true vs pred valence 
+        # Plot true vs pred valence 
         plt.scatter(true_valences, pred_valences)
         plt.xlabel("True valence")
         plt.ylabel("Pred valence")

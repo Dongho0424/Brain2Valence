@@ -236,6 +236,9 @@ def get_torch_dataloaders(
             weights = torch.Tensor(train_dataset.get_weights().values)
             sampler = WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
 
+            # check whether test dataset is well-distirbuted
+            verify_distribution(sampler, train_dataset)
+
         train_dl = DataLoader(train_dataset, batch_size=batch_size, sampler=sampler)
         val_dl = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
@@ -257,13 +260,15 @@ def get_torch_dataloaders(
         )        
 
         sampler = None
+        print("get_torch_dataloaders: use_sampler", use_sampler)
+        print("get_torch_dataloaders: task_type", task_type)
         # using WeightedRandomSampler at classif task
         # NOTE: Originally, test dataset does not need to be weighted, but for the sake of class consistency
         if task_type == "classif" and use_sampler:
             weights = torch.Tensor(test_dataset.get_weights().values)
             sampler = WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
 
-            # temporarily check whether test dataset is well-distirbuted
+            # check whether test dataset is well-distirbuted
             verify_distribution(sampler, test_dataset)
 
         test_dl = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, sampler=sampler)
@@ -337,7 +342,7 @@ def verify_distribution(sampler, dataset):
 
     # Iterate over the sampled data
     for idx in sampler:
-        brain3d, target = dataset[idx]
+        _, target, _, _ = dataset[idx]
         targets.append(target)
 
     # Count the number of instances of each class
