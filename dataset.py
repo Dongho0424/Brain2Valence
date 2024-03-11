@@ -18,7 +18,9 @@ class BrainValenceDataset(Dataset):
                  task_type="reg",
                  num_classif=3,
                  data: str = 'brain3d',
-                 use_sampler: bool = False
+                 use_sampler: bool = False,
+                 use_body: bool = False,
+                 transform=None,
                  ):
 
         self.data_path = data_path
@@ -28,6 +30,8 @@ class BrainValenceDataset(Dataset):
         self.num_classif = num_classif
         self.data = data
         self.use_sampler = use_sampler
+        self.use_body = use_body
+        self.transform = transform
 
         if split in ['train', 'val']:
             # firstly, concat boath train and val csv file corresponding to each subject
@@ -38,11 +42,11 @@ class BrainValenceDataset(Dataset):
             self.metadata = pd.concat(dfs)
             self.metadata.reset_index(inplace=True, drop=True)
 
-            # then split the metadata into train and test with 80/20 split
+            # then split the metadata into train and test with 9:1 split
             # randomly shuffle with fixed seed in order to get same splitted index whenever call this dataset.
             fixed_suffle_seed = 0
-            # Split the data into train and validation sets in an 8:2 ratio
-            self.train_metadata, self.val_metadata = train_test_split(self.metadata, test_size=0.2, random_state=fixed_suffle_seed)
+            self.train_metadata, self.val_metadata = train_test_split(
+                self.metadata, test_size=0.1, random_state=fixed_suffle_seed)
 
             if split == 'train':
                 self.metadata = self.train_metadata
@@ -59,31 +63,33 @@ class BrainValenceDataset(Dataset):
             ValueError("split should be one of 'train', 'val', 'test'")
 
         # get joint data between NSD and EMOTIC and COCO
-        self.nsd_df = nsd_df # given NSD dataset metadata file
-        self.emotic_annotations = emotic_annotations 
+        self.nsd_df = nsd_df  # given NSD dataset metadata file
+        self.emotic_annotations = emotic_annotations
         self.target_cocoid = target_cocoid
 
-        # pre convert nsd data
-        # appropriately matching exact id of COCO image given metadata.csv
-        self.coco_id = self.nsd2coco()
-        # use only joint and target(one person in picture) image
-        # target_cocoid와 joint 한 것만 남긴다.
-        isin = self.coco_id.isin(self.target_cocoid)
-        self.coco_id = self.coco_id[isin]
-        # metadata도 남길 애들만 남긴다.
+        self.get_cocoid()
+
+        # get joint data between NSD and EMOTIC and COCO
+        # by using 'coco_id' column of metadata
+        isin = self.metadata['coco_id'].isin(self.target_cocoid)
         self.metadata = self.metadata[isin]
 
-        # Get valence from emotic_annotations corresponding to coco_id.
-        valence = [self.emotic_annotations[coco_id]['valence'][-1] for coco_id in self.coco_id]
-        self.metadata['valence'] = valence
+        # add bbox, VAD to metadata
+        self.set_annotations()
 
         # Divide valence into intervals according to num_classif
         bins = []
-        if self.num_classif == 3: bins = [0, 4, 7, 10]
-        elif self.num_classif == 5: bins = [0, 2, 4, 6, 8, 10]
-        elif self.num_classif == 10: bins = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-        else: ValueError("num_classif should be one of 3, 5, 10")
+        if self.num_classif == 3:
+            bins = [0, 4, 7, 10]
+        elif self.num_classif == 5:
+            bins = [0, 2, 4, 6, 8, 10]
+        elif self.num_classif == 10:
+            bins = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        else:
+            ValueError("num_classif should be one of 3, 5, 10")
         self.metadata['valence_interval'] = pd.cut(self.metadata['valence'], bins=bins, labels=False, include_lowest=True)
+        self.metadata['arousal_interval'] = pd.cut(self.metadata['arousal'], bins=bins, labels=False, include_lowest=True)
+        self.metadata['dominance_interval'] = pd.cut(self.metadata['dominance'], bins=bins, labels=False, include_lowest=True)
 
         if self.use_sampler:
             self.set_weights()
@@ -96,9 +102,10 @@ class BrainValenceDataset(Dataset):
         -----
         - Divide valence into intervals according to num_classif 
         """
-        
+
         # Get num classes of each interval.
-        class_sample_counts = self.metadata['valence_interval'].value_counts().sort_index()
+        class_sample_counts = self.metadata['valence_interval'].value_counts(
+        ).sort_index()
         # print(class_sample_counts)
 
         # save weight of each interval, which is the invert of count per sample.
@@ -107,7 +114,7 @@ class BrainValenceDataset(Dataset):
 
     def get_weights(self):
         assert self.use_sampler, "You should set use_sampler to True in order to use this method"
-        
+
         return self.metadata['weight']
 
     def __len__(self):
@@ -118,46 +125,101 @@ class BrainValenceDataset(Dataset):
         repeat_index = idx % 3
 
         sample = self.metadata.iloc[idx]
-        split = self.get_split_info(sample['coco']) # 'coco' or 'voxel' or ... don't matter
-        
+        # 'img' or 'voxel' or ... don't matter
+        split = sample['img'].split('_')[0]
+
         data = None
 
-        if self.data == 'brain3d':    
-            brain_3d = torch.from_numpy(np.load(os.path.join(self.data_path, split, sample['mri']))) # (3, *, *, *)
+        if self.data == 'brain3d':
+            brain_3d = torch.from_numpy(np.load(os.path.join(
+                self.data_path, split, sample['mri'])))  # (3, *, *, *)
             # brain_3d = torch.mean(brain_3d, dim=0) # (*, *, *)
             brain_3d = brain_3d[repeat_index]
-            brain_3d = self.reshape_brain3d(brain_3d) # (96, 96, 96)
+            brain_3d = self.reshape_brain3d(brain_3d)  # (96, 96, 96)
 
             data = brain_3d
         elif self.data == 'roi':
             if len(self.subjects) > 1:
                 raise ValueError("Only one subject's roi data is available")
-            roi = torch.from_numpy(np.load(os.path.join(self.data_path, split, sample['voxel']))) # (3, *) 
+            roi = torch.from_numpy(np.load(os.path.join(
+                self.data_path, split, sample['voxel'])))  # (3, *)
             # roi = torch.mean(roi, dim=0) # (*, )
             roi = roi[repeat_index]
 
             data = roi
-        
+
         # regression task: normalized valence
         # classification task: valence_interval with respect to num_classif
         valence = (sample['valence'] / 10.0) if self.task_type == 'reg' else sample['valence_interval']
+        arousal = (sample['arousal'] / 10.0) if self.task_type == 'reg' else sample['arousal_interval']
+        dominance = (sample['dominance'] / 10.0) if self.task_type == 'reg' else sample['dominance_interval']
 
-        coco_id = self.coco_id.iloc[idx]
+        coco_path = '/home/dongho/brain2valence/data'
+        orig_img = sample['orig_img']
+        orig_image = Image.open(os.path.join(coco_path, orig_img.split('_')[1], orig_img))
+        
+        # crop body from image
+        # using bbox
+        if self.use_body:
+            bbox = sample['bbox']
+            image = orig_image.crop((bbox[0], bbox[1], bbox[2], bbox[3]))
+        # use transform
+        if self.transform is not None:
+            image = self.transform(image)
 
-        image = Image.open(os.path.join(self.data_path, split, sample['img']))
-        image = transforms.ToTensor()(image)
+        return data, image, valence, arousal, dominance
 
-        return data, valence, coco_id, image
+    def get_cocoid(self) -> pd.Series:
+        """
+        As the data of 'coco' column of `self.metadata` is nsd_id,
+        1. Rename it with 'nsd_id'
+        2. From `self.nsd_df`, add corresponding 'coco_id' data to `self.metadata`
+        """
 
-    def nsd2coco(self) -> pd.Series:
-        # metadata.csv의 coco column은 nsd_id이므로, 이를 `nsd_stim_info_merged.csv` 를 읽어온 후,
-        # nsdid => coco id 로 바꿔줌
+        # rename
+        self.metadata = self.metadata.rename(columns={'coco': 'nsd_id'})
 
-        nsd_id = self.metadata['coco'].apply(lambda x: np.load(
-            os.path.join(self.data_path, self.get_split_info(x), x))[-1])
+        # get nsd_id from numpy data
+        nsd_id = self.metadata['nsd_id'].apply(lambda x: np.load(os.path.join(self.data_path, x.split('_')[0], x))[-1])
+
+        # get corresponding coco_id from nsd_df
         coco_id = nsd_id.apply(lambda x: self.nsd_df.loc[x, 'cocoId'])
 
-        return coco_id
+        # add new column to metadata, which is 'coco_id'
+        self.metadata['coco_id'] = coco_id
+
+    def set_annotations(self):
+        """
+        - Make (brain3d, image) be matched with bbox and VAD
+            - As we use data regardless of the number of people in image,
+            - particular (brain3d, image) may be repeated but corresponding (bbox, VAD) is unique.
+        - Also total the number of dataset is increased.
+        """
+        # Add a new column, original image address as 'orig_img'
+        temp_dict = dict([(e['coco_id'], e['filename']) for e in self.emotic_annotations])
+
+        self.metadata['orig_img'] = self.metadata['coco_id'].apply(lambda x: temp_dict[x])
+
+        # Create a new DataFrame to store the squeezed data
+        new_columns = list(self.metadata.columns) + ['bbox', 'valence', 'arousal', 'dominance']
+        new_metadata = pd.DataFrame(columns=new_columns)
+
+        for idx, row in self.metadata.iterrows():
+
+            coco_id = row['coco_id']
+            annot = [e['people'] for e in self.emotic_annotations if e['coco_id'] == coco_id][0]
+            # As different number of people is in the image
+            # Repeat the same row as the number of people in the image
+            for a in annot:
+                new_row = row.copy()
+                new_row['bbox'] = a['bbox']
+                new_row['valence'] = a['valence']
+                new_row['arousal'] = a['arousal']
+                new_row['dominance'] = a['dominance']
+                new_row = pd.DataFrame(new_row).T  # for concatenating
+                new_metadata = pd.concat([new_metadata, new_row], ignore_index=True)
+
+        self.metadata = new_metadata.reset_index(drop=True)
 
     def reshape_brain3d(self, brain_3d: torch.Tensor):
         # brain_3d: (*, *, *)
@@ -177,18 +239,4 @@ class BrainValenceDataset(Dataset):
         brain_3d = torch.nn.functional.pad(brain_3d, (shape_z_diff_1, shape_z_diff_2, shape_y_diff_1,
                                            shape_y_diff_2, shape_x_diff_1, shape_x_diff_2), mode='constant', value=0)
 
-        return brain_3d
-
-    # FIXME: 나이브하게 짠 것 바꾸면 좋겠다. 하지만 이건 후순위
-    def get_split_info(self, x: str) -> str:
-        # unfortunately build this naive way
-        # may fix later
-        if "train" in x:
-            return "train"
-        elif "val" in x:
-            return "val"
-        elif 'test' in x:
-            return 'test'
-        else:
-            ValueError("get_split_info: couldn't get split info")
-
+        return brain_3d   

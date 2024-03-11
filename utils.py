@@ -59,9 +59,9 @@ def get_emotic_data() -> dict:
     ------
     emotic_annotations
     1. get EMOTIC data from COCO dataset
-    2. zip its cocoid with emotic_annotations(valence, arousal, dominance)
+    2. zip its cocoid with annotations(bbox, valence, arousal, dominance)
     """
-    file_name_emotic_annot = './emotic_annotations.mat'
+    file_name_emotic_annot = '/home/dongho/brain2valence/data/emotic_annotations.mat'
 
     ## get EMOTIC data
     data = scipy.io.loadmat(file_name_emotic_annot, simplify_cells=True)
@@ -69,29 +69,39 @@ def get_emotic_data() -> dict:
     emotic_coco_data = [x for x in emotic_data if x['original_database']['name']=='mscoco']
     coco_id = [x['original_database']['info']['image_id'] for x in emotic_coco_data]
 
+    
     emotic_annotations = []
     for sample in emotic_coco_data:
+
+        coco_id = sample['original_database']['info']['image_id']
+        filename = sample['filename']
         person = [sample['person']] if isinstance(sample['person'], dict) else sample['person']
 
-        valences = []
-        arousals = []
-        dominances = []
+        annot_per_person = []
         for p in person:
+            annot = dict()
+
+            # add bbox
+            annot['bbox'] = p['body_bbox']
+
             emotions = p['annotations_continuous']
             emotions = [emotions] if isinstance(emotions, dict) else emotions
 
             if len(emotions) != 1: # 한 사진에 대해서 여러명이 annotate한 경우
-                valences.append(p['combined_continuous']['valence'])
-                arousals.append(p['combined_continuous']['arousal'])
-                dominances.append(p['combined_continuous']['dominance'])
+                annot['valence'] = p['combined_continuous']['valence']
+                annot['arousal'] = p['combined_continuous']['arousal']
+                annot['dominance'] = p['combined_continuous']['dominance']
             else:
-                valences.append(p['annotations_continuous']['valence'])
-                arousals.append(p['annotations_continuous']['arousal'])
-                dominances.append(p['annotations_continuous']['dominance'])
+                annot['valence'] = p['annotations_continuous']['valence']
+                annot['arousal'] = p['annotations_continuous']['arousal']
+                annot['dominance'] = p['annotations_continuous']['dominance']
 
-        emotic_annotations += [{ 'valence':valences, 'arousal':arousals, 'dominance':dominances}]
-
-    emotic_annotations = dict(zip(coco_id, emotic_annotations))
+            annot_per_person.append(annot)
+        emotic_annotation = dict()
+        emotic_annotation['coco_id'] = coco_id
+        emotic_annotation['filename'] = filename
+        emotic_annotation['people'] = annot_per_person
+        emotic_annotations.append(emotic_annotation)
 
     return emotic_annotations
 
@@ -106,7 +116,7 @@ def get_NSD_data(emotic_annotations):
         3. has valence annotation
     """
     # out: target_cocoid
-    file_name_nsd_stim = './nsd_stim_info_merged.csv'
+    file_name_nsd_stim = '/home/dongho/brain2valence/data/nsd_stim_info_merged.csv'
 
     ## get NSD data
     df = pd.read_csv(file_name_nsd_stim)
@@ -115,10 +125,17 @@ def get_NSD_data(emotic_annotations):
     nsd_cocosplit = df['cocoSplit'].values
     nsd_isshared = df['shared1000'].values
 
-    joint_cocoid = nsd_cocoid[np.isin(nsd_cocoid, list(emotic_annotations.keys()))]
-    target_cocoid = [coco_id for coco_id in joint_cocoid if len(emotic_annotations[coco_id]['valence']) == 1]
-    train_cocoid = nsd_cocoid[np.isin(nsd_cocoid, target_cocoid) &  ~nsd_isshared]
-    test_cocoid = nsd_cocoid[np.isin(nsd_cocoid, target_cocoid) &  nsd_isshared]
+    cocoid_from_emotic = [e['coco_id'] for e in emotic_annotations]
+    joint_cocoid = nsd_cocoid[np.isin(nsd_cocoid, cocoid_from_emotic)]
+
+    # target_cocoid: has only one person in the image
+    # currently, not used
+    # target_cocoid = [coco_id for coco_id in joint_cocoid if len(emotic_annotations[coco_id]) == 1]
+
+    # target_cocoid: regardless of the number of people in the image
+    target_cocoid = joint_cocoid
+    # train_cocoid = nsd_cocoid[np.isin(nsd_cocoid, target_cocoid) &  ~nsd_isshared]
+    # test_cocoid = nsd_cocoid[np.isin(nsd_cocoid, target_cocoid) &  nsd_isshared]
 
     return df, target_cocoid
 
