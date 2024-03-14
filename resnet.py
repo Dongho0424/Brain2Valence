@@ -4,7 +4,6 @@ import torch.nn.functional as F
 from functools import partial
 from os.path import join, expanduser
 
-#TODO: dataloader 등 뿌려주는 거 다시 봐야함. (디버깅)
 
 ## EMOTIC dataset
 ## NSD와 겹치는 데이터로

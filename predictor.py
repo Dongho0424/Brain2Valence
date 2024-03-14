@@ -1,16 +1,18 @@
 import wandb
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from torchvision.transforms import v2
 import os
 import utils
-from model import Brain2ValenceModel
+from model import Brain2ValenceModel, Image2VADModel
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import mean_squared_error, r2_score
 
 # \TODO: 1. ROI 추출한 15000개짜리 시그널에 MLP 붙여서 똑같이 regression
 # - subject-wise: subject1만 해보기
-# TODO: 2. Brainformer로 참고해서 regression
+# \TODO: 2. Brainformer로 참고해서 regression
 # - subject-wise: subject1만 해보기
 # 그래도 안되면???
 # \TODO: 3. valence를 3(0~4,4~7,7~10) or 5구간으로 나눠서 classification
@@ -65,6 +67,13 @@ class Predictor:
         self.subjects = [1, 2, 5, 7] if self.args.all_subjects else [self.args.subj]
         print('Train for current subjects:,', [f"subject{sub}" for sub in self.subjects])
 
+        transform = v2.Compose([
+            v2.Resize((224, 224)),
+            v2.ToImage(),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+
         test_dl, num_test = utils.get_torch_dataloaders(
             batch_size=1, # 1 for test data loader
             data_path = data_path,
@@ -77,6 +86,8 @@ class Predictor:
             num_classif=self.args.num_classif,
             data=self.args.data,
             use_sampler=self.args.sampler,
+            use_body=True,
+            transform=transform,
         )
 
         # for debugging
@@ -99,13 +110,24 @@ class Predictor:
         return test_dl, num_test
     
     def load_model(self, args, use_best=True) -> nn.Module :
-        model = Brain2ValenceModel(
-            model_name=self.args.model,
-            task_type=self.args.task_type,
-            num_classif=self.args.num_classif,
-            subject=self.subjects,
-        )
+        if self.args.task_type == 'img2vad':
+            model = Image2VADModel(
+                model_name=self.args.model,
+                num_classif=self.args.num_classif,
+                pretrained=self.args.pretrain
+            )
+        elif self.args.task_type in ['reg', 'classif']:
+            model = Brain2ValenceModel(
+                model_name=self.args.model,
+                task_type=self.args.task_type,
+                num_classif=self.args.num_classif,
+                subject=self.subjects,
+            )
+        else: 
+            raise NotImplementedError(f"task type {self.args.task_type} is not implemented")
+        
         model_name = args.model_name # ex) "all_subjects_res18_mae_2"
+
         if use_best:
             best_path = os.path.join(self.args.save_path, model_name, "best_model.pth")
             model.load_state_dict(torch.load(best_path))
@@ -127,9 +149,12 @@ class Predictor:
 
         if self.args.task_type == "reg":
             self.predict_regression()
-
         elif self.args.task_type == "classif":
             self.predict_classification()
+        elif self.args.task_type == "img2vad":
+            self.predict_img2vad()
+        else: 
+            raise NotImplementedError(f"task type {self.args.task_type} is not implemented")
 
     def predict_classification(self):
         test_loss = 0.0
@@ -141,7 +166,7 @@ class Predictor:
 
         # data: brain3d or roi
         with torch.no_grad():
-            for i, (data, valence, coco_id, img) in enumerate(self.test_dl):
+            for i, (data, image, valence, arousal, dominance) in enumerate(self.test_dl):
                 if i == 0:
                     print("data type:", self.args.data)
                     print("task type:", self.args.task_type)
@@ -191,7 +216,7 @@ class Predictor:
 
         # data: brain3d or roi
         with torch.no_grad():
-            for i, (data, valence, coco_id, img) in enumerate(self.test_dl):
+            for i, (data, image, valence, arousal, dominance) in enumerate(self.test_dl):
                 if i == 0:
                     print("data type:", self.args.data)
                     print("task type:", self.args.task_type)
@@ -227,6 +252,44 @@ class Predictor:
                 
         wandb.log({"plot true valence vs pred valence": wandb.Image(plt)})
         plt.clf()
+
+    def predict_img2vad(self):
+        pred_vad = torch.Tensor().cuda()
+        gt_vad = torch.Tensor().cuda()
+
+        with torch.no_grad():
+            for i, (data, image, valence, arousal, dominance) in enumerate(self.test_dl):
+                data = data.float().cuda()
+                image = image.float().cuda()
+                valence = valence.float().cuda()
+                arousal = arousal.float().cuda()
+                dominance = dominance.float().cuda()
+
+                pred = self.model(image) # (1, 3)
+                pred_vad = torch.cat((pred_vad, pred), dim=0)
+                
+                gt = torch.stack([valence, arousal, dominance], dim=1).float().cuda() # (1, 3)
+                gt_vad = torch.cat((gt_vad, gt), dim=0)
+
+        vad_mae = F.l1_loss(pred_vad, gt_vad, reduction='none')
+        v_mae = vad_mae[:, 0].mean().item()
+        a_mae = vad_mae[:, 1].mean().item()
+        d_mae = vad_mae[:, 2].mean().item()
+        total_mae = vad_mae.mean().item()
+
+        print("valence mae: {:.4f}, arousal mae: {:.4f}, dominance mae: {:.4f}, total mae: {:.4f}".format(v_mae, a_mae, d_mae, total_mae))
+        
+        wandb.log({"valence_mae": v_mae, "arousal_mae": a_mae, "dominance_mae": d_mae, "total_mae": total_mae})
+
+        for index, vad in enumerate(['valence', 'arousal', 'dominance']):
+            # Plot true vs pred valence 
+            plt.scatter(gt_vad[:, index].cpu().numpy(), pred_vad[:, index].cpu().numpy())
+            plt.xlabel(f"True {vad}")
+            plt.ylabel(f"Pred {vad}")
+            plt.plot([0, 1], [0, 1], color='red', linestyle='--')
+                    
+            wandb.log({f"plot true {vad} vs pred {vad}": wandb.Image(plt)})
+            plt.clf()
     
     def make_log_name(self, args):
         log_name = ""
@@ -242,3 +305,4 @@ class Predictor:
         log_name += "momentum={}-".format(args.momentum)
         log_name += "seed={}".format(args.seed)
         return log_name
+    

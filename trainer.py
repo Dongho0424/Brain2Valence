@@ -4,7 +4,8 @@ import torch.nn as nn
 from torch.cuda.amp import autocast, GradScaler
 import os
 import utils 
-from model import Brain2ValenceModel
+from model import Brain2ValenceModel, Image2VADModel
+from torchvision.transforms import v2
 from tqdm import tqdm
 
 class Trainer:
@@ -56,6 +57,13 @@ class Trainer:
         self.subjects = [1, 2, 5, 7] if self.args.all_subjects else [self.args.subj]
         print('Train for current subjects:,', [f"subject{sub}" for sub in self.subjects])
 
+        transform = v2.Compose([
+            v2.Resize((224, 224)),
+            v2.ToImage(),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+
         train_dl, val_dl, num_train, num_val = utils.get_torch_dataloaders(
             batch_size=self.args.batch_size,
             data_path=data_path,
@@ -68,6 +76,8 @@ class Trainer:
             num_classif=self.args.num_classif,
             data=self.args.data,
             use_sampler=self.args.sampler,
+            use_body=True,
+            transform=transform,
         )
 
         print('# train data:', num_train)
@@ -76,12 +86,22 @@ class Trainer:
         return train_dl, val_dl, num_train, num_val
     
     def get_model(self):
-        model = Brain2ValenceModel(
-            model_name=self.args.model,
-            task_type=self.args.task_type,
-            num_classif=self.args.num_classif,
-            subject=self.subjects,
-        )
+        if self.args.task_type == 'img2vad':
+            model = Image2VADModel(
+                model_name=self.args.model,
+                num_classif=self.args.num_classif,
+                pretrained=self.args.pretrain
+            )
+        elif self.args.task_type in ['reg', 'classif']:
+            model = Brain2ValenceModel(
+                model_name=self.args.model,
+                task_type=self.args.task_type,
+                num_classif=self.args.num_classif,
+                subject=self.subjects,
+            )
+        else: 
+            raise NotImplementedError(f"task type {self.args.task_type} is not implemented")
+        
         utils.print_model_info(model)
         return model
 
@@ -107,6 +127,8 @@ class Trainer:
     def get_criterion(self):
         if self.args.criterion == "mse":
             criterion = nn.MSELoss()
+        elif self.args.criterion == "mse_sum":
+            criterion = nn.MSELoss(reduction='sum')
         elif self.args.criterion == "mae":
             criterion = nn.L1Loss()
         elif self.args.criterion == "ce":
@@ -130,61 +152,78 @@ class Trainer:
             scaler = GradScaler()
 
             # data: brain3d or roi
-            for i, (data, valence, coco_id, img) in tqdm(enumerate(self.train_dl)):
-                if i == 0:
-                    print("data type:", self.args.data)
-                    print("task type:", self.args.task_type)
-                    print("data shape:", data.shape)
-                    print("valence shape:", valence.shape)
+            for i, (data, image, valence, arousal, dominance) in tqdm(enumerate(self.train_dl)):
+                
                 self.optimizer.zero_grad()
                 data = data.float().cuda()
-                valence = valence.long().cuda()
-                
-                with autocast():
-                    pred_valence = self.model(data)
-                    # Reshape data and target to handle varying batch sizes
-                    pred_valence = pred_valence.view(data.size(0), -1)
-                    valence = valence.view(valence.size(0))
-                    loss = self.criterion(pred_valence, valence)
-                # Scales loss and calls backward() to create scaled gradients
-                scaler.scale(loss).backward()
-                # Unscales gradients and calls optimizer.step()
-                scaler.step(self.optimizer)
-                # Updates the scale for next iteration
-                scaler.update()
+                image = image.float().cuda()
+                valence = valence.float().cuda()
+                arousal = arousal.float().cuda()
+                dominance = dominance.float().cuda()
+                if self.args.task_type in ['reg', 'classif']:
 
-                # loss.item(): the average loss of the batch
-                # multiply by batch size to get total loss
-                train_loss += loss.item() * self.args.batch_size # multiply by batch size
+                    with autocast():
+                        pred_valence = self.model(data)
+                        # Reshape data and target to handle varying batch sizes
+                        pred_valence = pred_valence.view(data.size(0), -1)
+                        valence = valence.view(valence.size(0))
+                        loss = self.criterion(pred_valence, valence)
+                    # Scales loss and calls backward() to create scaled gradients
+                    scaler.scale(loss).backward()
+                    # Unscales gradients and calls optimizer.step()
+                    scaler.step(self.optimizer)
+                    # Updates the scale for next iteration
+                    scaler.update()
+
+                    # loss.item(): the average loss of the batch
+                    # multiply by batch size to get total loss
+                    train_loss += loss.item() * self.args.batch_size # multiply by batch size
+
+                elif self.args.task_type == 'img2vad':
+                    pred = self.model(image)
+                    gt = torch.stack([valence, arousal, dominance], dim=1).float().cuda()
+                    loss = self.criterion(pred, gt) # always mse
+                    loss.backward()
+                    self.optimizer.step()
+                    train_loss += loss.item() * self.args.batch_size
+                else: 
+                    raise NotImplementedError(f"task type {self.args.task_type} is not implemented")
             
             # get average total loss by dividing by the number of train data
             train_loss /= float(self.num_train)
             wandb.log(
                 {"train_loss": train_loss, 
-                 "lr": self.optimizer.param_groups[0]['lr']}, step=epoch)
-                
+                 "lr": self.optimizer.param_groups[0]['lr']}, step=epoch)    
 
             self.model.eval()
             val_loss = 0
             with torch.no_grad():
-                for i, (data, valence, coco_id, img) in tqdm(enumerate(self.val_dl)):
-                    if i == 0:
-                        print("data type:", self.args.data)
-                        print("task type:", self.args.task_type)
-                        print("data shape:", data.shape)
-                        print("valence shape:", valence.shape)
+                for i, (data, image, valence, arousal, dominance) in tqdm(enumerate(self.val_dl)):
+                    
                     data = data.float().cuda()
-                    valence = valence.long().cuda()
+                    image = image.float().cuda()
+                    valence = valence.float().cuda()
+                    arousal = arousal.float().cuda()
+                    dominance = dominance.float().cuda()
 
-                    pred_valence = self.model(data)
-                    loss = self.criterion(pred_valence, valence)
-                    val_loss += loss.item() * self.args.batch_size # multiply by batch size
+                    if self.args.task_type in ['reg', 'classif']:
+                        pred_valence = self.model(data)
+                        loss = self.criterion(pred_valence, valence)
+                        val_loss += loss.item() * self.args.batch_size # multiply by batch size
+
+                    elif self.args.task_type == 'img2vad':
+                        pred = self.model(image)
+                        gt = torch.stack([valence, arousal, dominance], dim=1).float().cuda()
+                        loss = self.criterion(pred, gt)
+                        val_loss += loss.item() * self.args.batch_size # multiply by batch size
+                    else: 
+                        raise NotImplementedError(f"task type {self.args.task_type} is not implemented")
                 val_loss /= float(self.num_val)
                 wandb.log({"val_loss": val_loss}, step=epoch)
             
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
-                wandb.log({"best_val_loss": best_val_loss})
+                wandb.log({"best_val_loss": best_val_loss}, step=epoch)
                 self.save_model(self.args, self.model, best=True)
                 
             self.scheduler.step()

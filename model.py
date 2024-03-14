@@ -4,6 +4,53 @@ import utils
 from typing import List
 from monai.networks.nets import resnet
 from resnet import ResNetwClf
+from torchvision.models import resnet18, ResNet18_Weights, resnet50, ResNet50_Weights
+
+class Image2VADModel(nn.Module):
+    def __init__(self,
+                 model_name: str = "resnet18",
+                #  task_type: str = "reg",
+                 num_classif: int = 3,
+                 pretrained=True,
+                 ):
+        super().__init__()
+
+        self.model_name = model_name
+        print("current model backbone:", model_name)
+
+        # the number of class for VAD regression: 3
+        # valence, arousal, dominance, respectively
+        # num_classes = num_classif if task_type == "classif" else 3
+        num_classes = 3
+        print("num_classes:", num_classes)
+
+        if self.model_name == "resnet18":
+            # load pretrained model
+            self.model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1) if pretrained else resnet18()
+            # freeze parameters
+            for param in self.model.parameters():
+                param.requires_grad = False
+            # add layer for fine tuning
+            num_ftrs = self.model.fc.in_features
+            self.model.fc = nn.Linear(num_ftrs, num_classes)
+        elif self.model_name == "resnet50":
+            # load pretrained model
+            self.model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2) if pretrained else resnet50()
+            # freeze parameters
+            for param in self.model.parameters():
+                param.requires_grad = False
+            # add layer for fine tuning
+            num_ftrs = self.model.fc.in_features
+            self.model.fc = nn.Linear(num_ftrs, num_classes)
+        else:
+            raise NotImplementedError(f"model {model_name} is not implemented")
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        - x: (B, 3, 224, 224)
+        - out: (B, num_classif)
+            - # valence, arousal, dominance, respectively
+        """
+        return self.model(x)
 
 class Brain2ValenceModel(nn.Module):
     def __init__(self,
@@ -21,7 +68,7 @@ class Brain2ValenceModel(nn.Module):
         num_classes = num_classif if task_type == "classif" else 1
         print("num_classes:", num_classes)
 
-        if model_name == "resnet18" or model_name == "resnet50":
+        if model_name == "resnet18":
             self.res_model = ResNetwClf(backbone_type='resnet_18', num_classes=num_classes)
             # self.model = resnet.resnet18(
             #     n_input_channels=1, num_classes=num_classes, feed_forward=True)

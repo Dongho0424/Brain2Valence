@@ -23,7 +23,7 @@ def get_args():
     # model_name: model 저장 디렉토리 및 현재 모델의 개괄 설명 간단히
     # kind of all_subjects_res18_mae_01, subject1_res18_mae_01
     args.add_argument('--model-name', type=str, default='all_subjects',required=True, help='name of model')
-    args.add_argument('--task-type', type=str, default="reg", choices=['reg', 'classif'], required=True, help='regression for valence(float), multiple classification for valence type')
+    args.add_argument('--task-type', type=str, default="reg", choices=['img2vad', 'reg', 'classif'], required=True, help='regression for valence(float), multiple classification for valence type')
     args.add_argument('--data', type=str, default="brain3d", choices=['brain3d', 'roi'], required=True, help='data for our task. brain3d: whole brain 3d voxel, roi: well-picked brain 1d array. CAUTION: roi is only with particular subjects.')
     args.add_argument('--all-subjects', action='store_true', default=False, help='train or predict for all subjects')
     args.add_argument('--subj', type=int, default=1, choices=[1,2,5,7], help='train or predict for particular subject number')
@@ -50,21 +50,17 @@ def get_args():
     # for predict
     args.add_argument("--best", action="store_true", help="Use best model", default=False)
     
-    # # split arguments with respect to execution mode
-    # train_args = args.add_argument_group('train')
-    # predict_args = args.add_argument_group('predict')
-    
-    # # train only arguments
-    # train_args.add_argument('')
-
-    # # predict only arguments
-    # predict_args.add_argument('')
+    # task type: regression
     reg_args = args.add_argument_group('regression')
-    # reg_args.add_argument()
 
+    # task type: classification
     classif_args = args.add_argument_group('classification')
     classif_args.add_argument("--num-classif", type=int, default=3, choices=[3, 5, 10], help="Number of classification type. \n3 for 0~4, 4~7, 7~10, 5 for 0~2, 2~4, 4~6, 6~8, 8~10, \n10 for 10 class clf. similar to regression")
     classif_args.add_argument("--sampler", action="store_true", help="Use weighted random sampler", default=False)
+
+    # task type: image to VAD
+    img2vad_args = args.add_argument_group('img2vad')
+    img2vad_args.add_argument('--pretrain', action='store_true', default=True, help='Use pretrained cnn backbone')
     
     args = args.parse_args()
 

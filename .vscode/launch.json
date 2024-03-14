@@ -120,6 +120,29 @@
             "env": {
                 "CUDA_VISIBLE_DEVICES": "3"
             }
+        },
+        {
+            "name": "img2vad_1",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--exec_mode", "predict",
+                "--all-subjects",
+                "--wandb-log",
+                "--wandb-name", "0313_img2vad_3_res18",
+                "--model-name", "0313_img2vad_3_res18",
+                "--wandb-project", "Brain2Valence",
+                "--wandb-entity", "donghochoi",
+                "--model", "resnet18",
+                "--data", "brain3d",
+                "--task-type", "img2vad",
+                "--best"
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "0"
+            }
         }
     ]
 }

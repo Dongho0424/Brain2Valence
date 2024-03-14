@@ -26,7 +26,7 @@ class BrainValenceDataset(Dataset):
         self.data_path = data_path
         self.split = split  # train, val, test
         self.subjects = subjects  # [1, 2, 5, 7]
-        self.task_type = task_type
+        self.task_type = task_type # ['reg', 'classif', 'img2vad']
         self.num_classif = num_classif
         self.data = data
         self.use_sampler = use_sampler
@@ -77,19 +77,9 @@ class BrainValenceDataset(Dataset):
         # add bbox, VAD to metadata
         self.set_annotations()
 
-        # Divide valence into intervals according to num_classif
-        bins = []
-        if self.num_classif == 3:
-            bins = [0, 4, 7, 10]
-        elif self.num_classif == 5:
-            bins = [0, 2, 4, 6, 8, 10]
-        elif self.num_classif == 10:
-            bins = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-        else:
-            ValueError("num_classif should be one of 3, 5, 10")
-        self.metadata['valence_interval'] = pd.cut(self.metadata['valence'], bins=bins, labels=False, include_lowest=True)
-        self.metadata['arousal_interval'] = pd.cut(self.metadata['arousal'], bins=bins, labels=False, include_lowest=True)
-        self.metadata['dominance_interval'] = pd.cut(self.metadata['dominance'], bins=bins, labels=False, include_lowest=True)
+        # Divide vad into intervals according to num_classif
+        if self.task_type == 'classif':
+            self.devide_vad()
 
         if self.use_sampler:
             self.set_weights()
@@ -150,9 +140,9 @@ class BrainValenceDataset(Dataset):
 
         # regression task: normalized valence
         # classification task: valence_interval with respect to num_classif
-        valence = (sample['valence'] / 10.0) if self.task_type == 'reg' else sample['valence_interval']
-        arousal = (sample['arousal'] / 10.0) if self.task_type == 'reg' else sample['arousal_interval']
-        dominance = (sample['dominance'] / 10.0) if self.task_type == 'reg' else sample['dominance_interval']
+        valence = (sample['valence'] / 10.0) if self.task_type in ['reg', 'img2vad'] else sample['valence_interval']
+        arousal = (sample['arousal'] / 10.0) if self.task_type in ['reg', 'img2vad'] else sample['arousal_interval']
+        dominance = (sample['dominance'] / 10.0) if self.task_type in ['reg', 'img2vad'] else sample['dominance_interval']
 
         coco_path = '/home/dongho/brain2valence/data'
         orig_img = sample['orig_img']
@@ -220,6 +210,20 @@ class BrainValenceDataset(Dataset):
                 new_metadata = pd.concat([new_metadata, new_row], ignore_index=True)
 
         self.metadata = new_metadata.reset_index(drop=True)
+
+    def devide_vad(self):
+        bins = []
+        if self.num_classif == 3:
+            bins = [0, 4, 7, 10]
+        elif self.num_classif == 5:
+            bins = [0, 2, 4, 6, 8, 10]
+        elif self.num_classif == 10:
+            bins = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        else:
+            ValueError("num_classif should be one of 3, 5, 10")
+        self.metadata['valence_interval'] = pd.cut(self.metadata['valence'], bins=bins, labels=False, include_lowest=True)
+        self.metadata['arousal_interval'] = pd.cut(self.metadata['arousal'], bins=bins, labels=False, include_lowest=True)
+        self.metadata['dominance_interval'] = pd.cut(self.metadata['dominance'], bins=bins, labels=False, include_lowest=True)
 
     def reshape_brain3d(self, brain_3d: torch.Tensor):
         # brain_3d: (*, *, *)

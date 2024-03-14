@@ -1,5 +1,6 @@
 {
     "files.watcherExclude": {
-        "data/*": true
+        "data/*": true,
+        "trained_models/*": true,
     }
 }

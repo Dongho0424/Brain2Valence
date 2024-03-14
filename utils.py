@@ -22,14 +22,19 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # - 아무튼 NSD의 사진을 보고 image 감정 라벨링을 우리가 하는 것이지.
 #TODO: Emoset dataset의 여러 감정 노테이션을 크게 3개의 감정으로 나눠서 그것을 분류하는 classification task를 할 수 있을까?
 def print_model_info(model):
-    total_params = 0
+    total_trainable_params = 0
+    total_nontrainable_params = 0
+
     print("Model's net structure:")
     print("Model name:", model.__class__.__name__)
     for name, param in model.named_parameters():
+        print(f"Layer: {name}, Type: {type(param.data).__name__}, Parameters: {param.numel()}")
         if param.requires_grad:
-            print(f"Layer: {name}, Type: {type(param.data).__name__}, Parameters: {param.numel()}")
-            total_params += param.numel()
-    print(f"\nTotal trainable parameters: {total_params}")
+            total_trainable_params += param.numel()
+        else:
+            total_nontrainable_params += param.numel()
+    print(f"\nTotal trainable parameters: {total_trainable_params}")
+    print(f"\nTotal Non-trainable parameters: {total_nontrainable_params}")
 
 def set_seed(args):
     torch.manual_seed(args.seed)
@@ -196,6 +201,8 @@ def get_torch_dataloaders(
     num_classif=3,
     data: str = 'brain3d',
     use_sampler=False,
+    use_body=True,
+    transform=None,
 ):
     """
     Get PyTorch data loaders for training, validation, or testing.
@@ -213,6 +220,8 @@ def get_torch_dataloaders(
         num_classif (int, optional): The number of classifications. Defaults to 3.
         data (str, optional): The type of data. Choices of ['brain3d', 'roi']
         use_sampler (bool, optional): Whether to use the weighted random sampler. Defaults to False.
+        use_body (bool, optional): Whether to use cropped image by person. Defaults to True.
+        transform (callable, optional): A function/transform that takes in an PIL image and returns a transformed version. Defaults to None.
     Returns
     -------
         tuple: A tuple containing the data loaders and dataset sizes.
@@ -232,7 +241,9 @@ def get_torch_dataloaders(
             task_type=task_type,
             num_classif=num_classif,
             data=data,
-            use_sampler=use_sampler
+            use_sampler=use_sampler,
+            use_body=use_body,
+            transform=transform,
         )
         val_dataset = BrainValenceDataset(
             data_path=data_path,
@@ -244,7 +255,9 @@ def get_torch_dataloaders(
             task_type=task_type,
             num_classif=num_classif,
             data=data,
-            use_sampler=use_sampler
+            use_sampler=use_sampler,
+            use_body=use_body,
+            transform=transform,
         )
 
         sampler = None
@@ -273,7 +286,9 @@ def get_torch_dataloaders(
             task_type=task_type,
             num_classif=num_classif,
             data=data,
-            use_sampler=use_sampler
+            use_sampler=use_sampler,
+            use_body=use_body,
+            transform=transform,
         )        
 
         sampler = None
