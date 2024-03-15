@@ -283,7 +283,7 @@ class Predictor:
 
         for index, vad in enumerate(['valence', 'arousal', 'dominance']):
             # Plot true vs pred valence 
-            plt.scatter(gt_vad[:, index].cpu().numpy(), pred_vad[:, index].cpu().numpy())
+            plt.scatter(gt_vad[:, index].cpu().numpy(), pred_vad[:, index].cpu().numpy(), alpha=0.4)
             plt.xlabel(f"True {vad}")
             plt.ylabel(f"Pred {vad}")
             plt.plot([0, 1], [0, 1], color='red', linestyle='--')

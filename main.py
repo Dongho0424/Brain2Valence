@@ -61,6 +61,7 @@ def get_args():
     # task type: image to VAD
     img2vad_args = args.add_argument_group('img2vad')
     img2vad_args.add_argument('--pretrain', action='store_true', default=True, help='Use pretrained cnn backbone')
+    img2vad_args.add_argument('--backbone_freeze', action='store_true', default=False, help='Freeze pretrained backbone')
     
     args = args.parse_args()
 

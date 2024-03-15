@@ -12,6 +12,7 @@ class Image2VADModel(nn.Module):
                 #  task_type: str = "reg",
                  num_classif: int = 3,
                  pretrained=True,
+                 backbone_freeze=False,
                  ):
         super().__init__()
 
@@ -28,8 +29,9 @@ class Image2VADModel(nn.Module):
             # load pretrained model
             self.model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1) if pretrained else resnet18()
             # freeze parameters
-            for param in self.model.parameters():
-                param.requires_grad = False
+            if backbone_freeze:
+                for param in self.model.parameters():
+                    param.requires_grad = False
             # add layer for fine tuning
             num_ftrs = self.model.fc.in_features
             self.model.fc = nn.Linear(num_ftrs, num_classes)
@@ -37,8 +39,9 @@ class Image2VADModel(nn.Module):
             # load pretrained model
             self.model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2) if pretrained else resnet50()
             # freeze parameters
-            for param in self.model.parameters():
-                param.requires_grad = False
+            if backbone_freeze:
+                for param in self.model.parameters():
+                    param.requires_grad = False
             # add layer for fine tuning
             num_ftrs = self.model.fc.in_features
             self.model.fc = nn.Linear(num_ftrs, num_classes)

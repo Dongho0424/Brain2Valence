@@ -90,7 +90,8 @@ class Trainer:
             model = Image2VADModel(
                 model_name=self.args.model,
                 num_classif=self.args.num_classif,
-                pretrained=self.args.pretrain
+                pretrained=self.args.pretrain,
+                backbone_freeze=self.args.backbone_freeze,
             )
         elif self.args.task_type in ['reg', 'classif']:
             model = Brain2ValenceModel(
