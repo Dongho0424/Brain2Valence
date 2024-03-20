@@ -39,8 +39,8 @@ def get_args():
     args.add_argument("--momentum", type=float, default=0.9, help="Momentum")
     args.add_argument("--model", type=str, default="resnet18", choices=["resnet18", "resnet50", 'mlp'], help="Model. CAUTION: mlp is only for roi data")
     args.add_argument("--num-workers", type=int, default=4, help="Number of workers")
-    args.add_argument("--optimizer", type=str, default="adamw", help="Optimizer")
-    args.add_argument("--scheduler", type=str, default="cosine", help="Scheduler")
+    args.add_argument("--optimizer", type=str, default="adamw", choices=["sgd", "adam", "adamw"], help="Optimizer")
+    args.add_argument("--scheduler", type=str, default="cosine", choices=["step", "cosine"], help="Scheduler")
     args.add_argument("--save-path", type=str, default="./trained_models", help="Save path")
     args.add_argument("--normalize", action="store_true", help="Normalize", default=False)
     args.add_argument("--n_layers", type=int, default=1, help="Number of layers")
@@ -61,7 +61,7 @@ def get_args():
     # task type: image to VAD
     img2vad_args = args.add_argument_group('img2vad')
     img2vad_args.add_argument('--pretrain', action='store_true', default=True, help='Use pretrained cnn backbone')
-    img2vad_args.add_argument('--backbone_freeze', action='store_true', default=False, help='Freeze pretrained backbone')
+    img2vad_args.add_argument('--backbone-freeze', action='store_true', default=False, help='Freeze pretrained backbone')
     
     args = args.parse_args()
 
