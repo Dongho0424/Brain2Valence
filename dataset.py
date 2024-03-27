@@ -294,4 +294,9 @@ class EmoticDataset(Dataset):
         arousal = sample['arousal'] / 10.0 if self.normalize else sample['arousal']
         dominance = sample['dominance'] / 10.0 if self.normalize else sample['dominance']
 
-        return context_image, body_image, valence, arousal, dominance
+        # get category label torch.tensor
+        cat_label = torch.zeros(26)
+        for cat in  sample['category']:
+            cat_label[cat] = 1
+
+        return context_image, body_image, valence, arousal, dominance, cat_label

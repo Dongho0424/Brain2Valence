@@ -1,3 +1,4 @@
+from collections import Counter
 import numpy as np
 import torch
 import torch.nn as nn
@@ -15,13 +16,15 @@ from torch.utils.data.sampler import WeightedRandomSampler
 from torchvision.transforms import v2
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-#TODO: label 수를 낮춰서 negative, neutral, positive 감정 label로 다운시키고, 그것을 classification 하는 task도 생각할 수 있겠다.
-#TODO: brain을 다 쓰지 말고, 감정에 잘 반응하는 특정 ROI가 있다.
-#TODO: NSD -> 3T로 넘어 가는게 허들. 3T에서 처리를 잘 할 수 있는 디코더를 만들어야 함. 유의미하다. whole brain을 잘 해야하낟.
-# 스피치, 동영상에서도 디코딩을 잘 해내야하는 것. 
+# TODO: label 수를 낮춰서 negative, neutral, positive 감정 label로 다운시키고, 그것을 classification 하는 task도 생각할 수 있겠다.
+# TODO: brain을 다 쓰지 말고, 감정에 잘 반응하는 특정 ROI가 있다.
+# TODO: NSD -> 3T로 넘어 가는게 허들. 3T에서 처리를 잘 할 수 있는 디코더를 만들어야 함. 유의미하다. whole brain을 잘 해야하낟.
+# 스피치, 동영상에서도 디코딩을 잘 해내야하는 것.
 # Question: NSD dataset의 사진을 보고, 우리가 크게 3개의 감정을 나눠서 분류하는 classificaiton task를 할 수 있을까?
 # - 아무튼 NSD의 사진을 보고 image 감정 라벨링을 우리가 하는 것이지.
-#TODO: Emoset dataset의 여러 감정 노테이션을 크게 3개의 감정으로 나눠서 그것을 분류하는 classification task를 할 수 있을까?
+# TODO: Emoset dataset의 여러 감정 노테이션을 크게 3개의 감정으로 나눠서 그것을 분류하는 classification task를 할 수 있을까?
+
+
 def print_model_info(model):
     total_trainable_params = 0
     total_nontrainable_params = 0
@@ -29,13 +32,15 @@ def print_model_info(model):
     print("Model's net structure:")
     print("Model name:", model.__class__.__name__)
     for name, param in model.named_parameters():
-        print(f"Layer: {name}, Type: {type(param.data).__name__}, Parameters: {param.numel()}")
+        print(
+            f"Layer: {name}, Type: {type(param.data).__name__}, Parameters: {param.numel()}")
         if param.requires_grad:
             total_trainable_params += param.numel()
         else:
             total_nontrainable_params += param.numel()
     print(f"\nTotal trainable parameters: {total_trainable_params}")
     print(f"\nTotal Non-trainable parameters: {total_nontrainable_params}")
+
 
 def set_seed(args):
     torch.manual_seed(args.seed)
@@ -45,6 +50,7 @@ def set_seed(args):
     torch.backends.cudnn.deterministic = True
     np.random.seed(args.seed)
     random.seed(args.seed)
+
 
 def seed_everything(seed=0, cudnn_deterministic=True):
     random.seed(seed)
@@ -56,8 +62,9 @@ def seed_everything(seed=0, cudnn_deterministic=True):
     if cudnn_deterministic:
         torch.backends.cudnn.deterministic = True
     else:
-        ## needs to be False to use conv3D
+        # needs to be False to use conv3D
         print('Note: not using cudnn.deterministic')
+
 
 def get_emotic_data() -> dict:
     """
@@ -69,19 +76,21 @@ def get_emotic_data() -> dict:
     """
     file_name_emotic_annot = '/home/dongho/brain2valence/data/emotic_annotations.mat'
 
-    ## get EMOTIC data
+    # get EMOTIC data
     data = scipy.io.loadmat(file_name_emotic_annot, simplify_cells=True)
     emotic_data = data['train'] + data['test'] + data['val']
-    emotic_coco_data = [x for x in emotic_data if x['original_database']['name']=='mscoco']
-    coco_id = [x['original_database']['info']['image_id'] for x in emotic_coco_data]
+    emotic_coco_data = [
+        x for x in emotic_data if x['original_database']['name'] == 'mscoco']
+    coco_id = [x['original_database']['info']['image_id']
+               for x in emotic_coco_data]
 
-    
     emotic_annotations = []
     for sample in emotic_coco_data:
 
         coco_id = sample['original_database']['info']['image_id']
         filename = sample['filename']
-        person = [sample['person']] if isinstance(sample['person'], dict) else sample['person']
+        person = [sample['person']] if isinstance(
+            sample['person'], dict) else sample['person']
 
         annot_per_person = []
         for p in person:
@@ -93,7 +102,7 @@ def get_emotic_data() -> dict:
             emotions = p['annotations_continuous']
             emotions = [emotions] if isinstance(emotions, dict) else emotions
 
-            if len(emotions) != 1: # 한 사진에 대해서 여러명이 annotate한 경우
+            if len(emotions) != 1:  # 한 사진에 대해서 여러명이 annotate한 경우
                 annot['valence'] = p['combined_continuous']['valence']
                 annot['arousal'] = p['combined_continuous']['arousal']
                 annot['dominance'] = p['combined_continuous']['dominance']
@@ -111,6 +120,7 @@ def get_emotic_data() -> dict:
 
     return emotic_annotations
 
+
 def get_NSD_data(emotic_annotations):
     """
     return
@@ -124,7 +134,7 @@ def get_NSD_data(emotic_annotations):
     # out: target_cocoid
     file_name_nsd_stim = '/home/dongho/brain2valence/data/nsd_stim_info_merged.csv'
 
-    ## get NSD data
+    # get NSD data
     df = pd.read_csv(file_name_nsd_stim)
     nsd_id = df['nsdId'].values
     nsd_cocoid = df['cocoId'].values
@@ -146,6 +156,8 @@ def get_NSD_data(emotic_annotations):
     return df, target_cocoid
 
 # currently, not used
+
+
 def get_target_valence(valence: torch.Tensor, task_type, num_classif):
     """
     Get the target valence based on the given valence tensor, task type, and number of classifications.
@@ -170,7 +182,7 @@ def get_target_valence(valence: torch.Tensor, task_type, num_classif):
         ValueError: If the task_type is not 'reg' or 'classif'.
         ValueError: If the num_classif is not 3 or 5.
     """
-        
+
     if task_type == 'reg':
         # Normalize valence to be in the range 0~1 for regression
         target_valence = valence / 10.0
@@ -187,15 +199,16 @@ def get_target_valence(valence: torch.Tensor, task_type, num_classif):
             raise ValueError("num_classif must be either 3 or 5.")
     else:
         raise ValueError("task_type must be either 'reg' or 'classif'.")
-        
+
     return target_valence
+
 
 def get_torch_dataloaders(
     batch_size,
     data_path,
     emotic_annotations,
     nsd_df,
-    target_cocoid, 
+    target_cocoid,
     mode='train',
     subjects=[1, 2, 5, 7],
     task_type="reg",
@@ -229,7 +242,7 @@ def get_torch_dataloaders(
             - If mode is 'train', returns (train_dl, val_dl, train_dataset_size, val_dataset_size).
             - If mode is 'test', returns (test_dl, test_dataset_size).
     """
-    
+
     if mode == 'train':
 
         train_dataset = BrainValenceDataset(
@@ -265,16 +278,18 @@ def get_torch_dataloaders(
         # using WeightedRandomSampler at classif task
         if task_type == "classif" and use_sampler:
             weights = torch.Tensor(train_dataset.get_weights().values)
-            sampler = WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
+            sampler = WeightedRandomSampler(
+                weights=weights, num_samples=len(weights), replacement=True)
 
             # check whether test dataset is well-distirbuted
             verify_distribution(sampler, train_dataset)
 
-        train_dl = DataLoader(train_dataset, batch_size=batch_size, sampler=sampler)
+        train_dl = DataLoader(
+            train_dataset, batch_size=batch_size, sampler=sampler)
         val_dl = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
         return train_dl, val_dl, len(train_dataset), len(val_dataset)
- 
+
     elif mode == 'test':
 
         test_dataset = BrainValenceDataset(
@@ -290,7 +305,7 @@ def get_torch_dataloaders(
             use_sampler=use_sampler,
             use_body=use_body,
             transform=transform,
-        )        
+        )
 
         sampler = None
         print("get_torch_dataloaders: use_sampler", use_sampler)
@@ -299,17 +314,20 @@ def get_torch_dataloaders(
         # NOTE: Originally, test dataset does not need to be weighted, but for the sake of class consistency
         if task_type == "classif" and use_sampler:
             weights = torch.Tensor(test_dataset.get_weights().values)
-            sampler = WeightedRandomSampler(weights=weights, num_samples=len(weights), replacement=True)
+            sampler = WeightedRandomSampler(
+                weights=weights, num_samples=len(weights), replacement=True)
 
             # check whether test dataset is well-distirbuted
             verify_distribution(sampler, test_dataset)
 
-        test_dl = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, sampler=sampler)
+        test_dl = DataLoader(
+            test_dataset, batch_size=batch_size, shuffle=False, sampler=sampler)
 
         return test_dl, len(test_dataset)
-    
-    else: 
+
+    else:
         TypeError("Wrong mode for dataloader")
+
 
 def plot_valence_histogram(true_valences, pred_valences):
     '''
@@ -325,17 +343,20 @@ def plot_valence_histogram(true_valences, pred_valences):
                 correctness_count[true] += 1
         else:
             correctness_count[true] = 1 if true == pred else 0
-    correctness_percentage = {true: (count / true_valences.count(true)) * 100 for true, count in correctness_count.items()}
+    correctness_percentage = {true: (
+        count / true_valences.count(true)) * 100 for true, count in correctness_count.items()}
 
-    plt.bar(correctness_percentage.keys(), correctness_percentage.values(), align='center', alpha=0.5)
+    plt.bar(correctness_percentage.keys(),
+            correctness_percentage.values(), align='center', alpha=0.5)
     plt.xlabel('True Valence')
     plt.ylabel('Correctness (%)')
     plt.xticks(range(max(true_valences) + 1))
     plt.yticks(range(0, 101, 10))
     plt.title('Correctness per Each Valence')
-    
+
     wandb.log({"plot correctness per each valence": wandb.Image(plt)})
     plt.clf()
+
 
 def get_num_voxels(subject: int) -> int:
     """
@@ -365,8 +386,6 @@ def get_num_voxels(subject: int) -> int:
         num_voxels = 14386
     return num_voxels
 
-
-from collections import Counter
 
 def verify_distribution(sampler, dataset):
 
@@ -425,53 +444,88 @@ def get_transforms_emotic():
 
     return train_context_transform, train_body_transform, test_context_transform, test_body_transform
 
+
 def get_emotic_df():
-        file_name_emotic_annot = '/home/dongho/brain2valence/data/emotic_annotations.mat'
-        data = scipy.io.loadmat(file_name_emotic_annot, simplify_cells=True)
-        emotic_annotations = data['train'] + data['test'] + data['val']
+    file_name_emotic_annot = '/home/dongho/brain2valence/data/emotic_annotations.mat'
+    data = scipy.io.loadmat(file_name_emotic_annot, simplify_cells=True)
+    emotic_annotations = data['train'] + data['test'] + data['val']
 
-        folders = []
-        filenames = []
-        bboxes = []
-        valences = []
-        arousals = []
-        dominances = []
-        for sample in emotic_annotations:
-            folder = sample['folder']
-            filename = sample['filename']
-            people = [sample['person']] if isinstance(sample['person'], dict) else sample['person']
+    folders = []
+    filenames = []
+    bboxes = []
+    valences = []
+    arousals = []
+    dominances = []
+    categories = [] # for emotic discrete categories, as index
 
-            for p in people:
-                folders.append(folder)
-                filenames.append(filename)
-                bboxes.append(p['body_bbox'])
+    cat2idx, _ = get_emotic_categories()
+    
+    for sample in emotic_annotations:
 
-                emotions = p['annotations_continuous']
-                emotions = [emotions] if isinstance(emotions, dict) else emotions
+        folder = sample['folder']
+        filename = sample['filename']
+        people = [sample['person']] if isinstance(sample['person'], dict) else sample['person']
 
-                if len(emotions) != 1:  # 한 사진에 대해서 여러명이 annotate한 경우
-                    valences.append(p['combined_continuous']['valence'])
-                    arousals.append(p['combined_continuous']['arousal'])
-                    dominances.append(p['combined_continuous']['dominance'])
-                else:
-                    valences.append(p['annotations_continuous']['valence'])
-                    arousals.append(p['annotations_continuous']['arousal'])
-                    dominances.append(p['annotations_continuous']['dominance'])
+        for p in people:
 
-        annotations = pd.DataFrame({'folder': folders,
-                                    'filename': filenames,
-                                    'bbox': bboxes,
-                                    'valence': valences,
-                                    'arousal': arousals,
-                                    'dominance': dominances})
+            folders.append(folder)
+            filenames.append(filename)
+            bboxes.append(p['body_bbox'])
 
-        # split data
-        # train: 70%, val: 15%, test: 15%
-        total_len = len(annotations)
-        train_len = int(total_len * 0.7)
-        val_len = int(total_len * 0.15)
-        train_data = annotations.iloc[:train_len].dropna().reset_index(inplace=False, drop=True)
-        val_data = annotations.iloc[train_len:train_len+val_len].dropna().reset_index(inplace=False, drop=True)
-        test_data = annotations.iloc[train_len+val_len:].dropna().reset_index(inplace=False, drop=True)
+            # for valence, arousal, dominance
+            continuous_emotions = p['annotations_continuous']
+            continuous_emotions = [continuous_emotions] if isinstance(continuous_emotions, dict) else continuous_emotions
 
-        return train_data, val_data, test_data
+            if len(continuous_emotions) != 1:  # 한 사진에 대해서 여러명이 annotate한 경우
+                valences.append(p['combined_continuous']['valence'])
+                arousals.append(p['combined_continuous']['arousal'])
+                dominances.append(p['combined_continuous']['dominance'])
+                
+            else:
+                valences.append(p['annotations_continuous']['valence'])
+                arousals.append(p['annotations_continuous']['arousal'])
+                dominances.append(p['annotations_continuous']['dominance'])
+
+            # for emotion categories
+            if 'combined_categories' in p: 
+                # print(p['combined_categories'])
+                combined_cat = p['combined_categories']
+                combined_cat = np.array([combined_cat]) if type(combined_cat) != np.ndarray else combined_cat
+                categories.append([cat2idx[e] for e in combined_cat])
+            else:
+                annot_cat = p['annotations_categories']['categories']
+                annot_cat = np.array([annot_cat]) if type(annot_cat) != np.ndarray else annot_cat
+                categories.append([cat2idx[e] for e in annot_cat])
+
+    annotations = pd.DataFrame({'folder': folders,
+                                'filename': filenames,
+                                'bbox': bboxes,
+                                'valence': valences,
+                                'arousal': arousals,
+                                'dominance': dominances,
+                                'category': categories})
+
+    # split data
+    # train: 70%, val: 15%, test: 15%
+    total_len = len(annotations)
+    train_len = int(total_len * 0.7)
+    val_len = int(total_len * 0.15)
+
+    train_data = annotations.iloc[:train_len].dropna().reset_index(inplace=False, drop=True)
+    val_data = annotations.iloc[train_len:train_len+val_len].dropna().reset_index(inplace=False, drop=True)
+    test_data = annotations.iloc[train_len+val_len:].dropna().reset_index(inplace=False, drop=True)
+
+    return train_data, val_data, test_data
+
+def get_emotic_categories():
+    categories = ['Affection', 'Anger', 'Annoyance', 'Anticipation', 'Aversion', 'Confidence', 'Disapproval',
+                  'Disconnection', 'Disquietment', 'Doubt/Confusion', 'Embarrassment', 'Engagement', 'Esteem',
+                  'Excitement', 'Fatigue', 'Fear', 'Happiness', 'Pain', 'Peace', 'Pleasure', 'Sadness',
+                  'Sensitivity', 'Suffering', 'Surprise', 'Sympathy', 'Yearning']
+
+    cat2ind = {}
+    ind2cat = {}
+    for idx, emotion in enumerate(categories):
+        cat2ind[emotion] = idx  
+        ind2cat[idx] = emotion
+    return cat2ind, ind2cat
