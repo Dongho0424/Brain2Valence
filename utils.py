@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import wandb
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import WeightedRandomSampler
+from torchvision.transforms import v2
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 #TODO: label 수를 낮춰서 negative, neutral, positive 감정 label로 다운시키고, 그것을 classification 하는 task도 생각할 수 있겠다.
@@ -383,3 +384,94 @@ def verify_distribution(sampler, dataset):
     # Print the counts
     for class_label, count in class_counts.items():
         print(f"Class {class_label}: {count}")
+
+
+def get_transforms_emotic():
+    image_size = 224
+    body_size = 112
+    context_mean = [0.4690646, 0.4407227, 0.40508908]
+    context_std = [0.2514227, 0.24312855, 0.24266963]
+    body_mean = [0.43832874, 0.3964344, 0.3706214]
+    body_std = [0.24784276, 0.23621225, 0.2323653]
+
+    train_context_transform = v2.Compose([
+        v2.ToImage(),
+        v2.Resize((image_size, image_size)),
+        v2.RandomHorizontalFlip(p=0.5),
+        v2.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4),
+        v2.ToDtype(torch.float32, scale=True),
+        v2.Normalize(mean=context_mean, std=context_std),
+    ])
+    train_body_transform = v2.Compose([
+        v2.ToImage(),
+        v2.Resize((body_size, body_size)),
+        v2.RandomHorizontalFlip(p=0.5),
+        v2.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4),
+        v2.ToDtype(torch.float32, scale=True),
+        v2.Normalize(mean=body_mean, std=body_std),
+    ])
+    test_context_transform = v2.Compose([
+        v2.ToImage(),
+        v2.Resize((image_size, image_size)),
+        v2.ToDtype(torch.float32, scale=True),
+        v2.Normalize(mean=context_mean, std=context_std),
+    ])
+    test_body_transform = v2.Compose([
+        v2.ToImage(),
+        v2.Resize((body_size, body_size)),
+        v2.ToDtype(torch.float32, scale=True),
+        v2.Normalize(mean=body_mean, std=body_std),
+    ])
+
+    return train_context_transform, train_body_transform, test_context_transform, test_body_transform
+
+def get_emotic_df():
+        file_name_emotic_annot = '/home/dongho/brain2valence/data/emotic_annotations.mat'
+        data = scipy.io.loadmat(file_name_emotic_annot, simplify_cells=True)
+        emotic_annotations = data['train'] + data['test'] + data['val']
+
+        folders = []
+        filenames = []
+        bboxes = []
+        valences = []
+        arousals = []
+        dominances = []
+        for sample in emotic_annotations:
+            folder = sample['folder']
+            filename = sample['filename']
+            people = [sample['person']] if isinstance(sample['person'], dict) else sample['person']
+
+            for p in people:
+                folders.append(folder)
+                filenames.append(filename)
+                bboxes.append(p['body_bbox'])
+
+                emotions = p['annotations_continuous']
+                emotions = [emotions] if isinstance(emotions, dict) else emotions
+
+                if len(emotions) != 1:  # 한 사진에 대해서 여러명이 annotate한 경우
+                    valences.append(p['combined_continuous']['valence'])
+                    arousals.append(p['combined_continuous']['arousal'])
+                    dominances.append(p['combined_continuous']['dominance'])
+                else:
+                    valences.append(p['annotations_continuous']['valence'])
+                    arousals.append(p['annotations_continuous']['arousal'])
+                    dominances.append(p['annotations_continuous']['dominance'])
+
+        annotations = pd.DataFrame({'folder': folders,
+                                    'filename': filenames,
+                                    'bbox': bboxes,
+                                    'valence': valences,
+                                    'arousal': arousals,
+                                    'dominance': dominances})
+
+        # split data
+        # train: 70%, val: 15%, test: 15%
+        total_len = len(annotations)
+        train_len = int(total_len * 0.7)
+        val_len = int(total_len * 0.15)
+        train_data = annotations.iloc[:train_len].dropna().reset_index(inplace=False, drop=True)
+        val_data = annotations.iloc[train_len:train_len+val_len].dropna().reset_index(inplace=False, drop=True)
+        test_data = annotations.iloc[train_len+val_len:].dropna().reset_index(inplace=False, drop=True)
+
+        return train_data, val_data, test_data

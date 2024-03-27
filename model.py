@@ -5,11 +5,11 @@ from typing import List
 from monai.networks.nets import resnet
 from resnet import ResNetwClf
 from torchvision.models import resnet18, ResNet18_Weights, resnet50, ResNet50_Weights
-
+# freeze, res18
+# TODO: cover context image given task type (B, BI)
 class Image2VADModel(nn.Module):
     def __init__(self,
                  model_name: str = "resnet18",
-                #  task_type: str = "reg",
                  num_classif: int = 3,
                  pretrained=True,
                  backbone_freeze=False,
@@ -34,7 +34,14 @@ class Image2VADModel(nn.Module):
                     param.requires_grad = False
             # add layer for fine tuning
             num_ftrs = self.model.fc.in_features
-            self.model.fc = nn.Linear(num_ftrs, num_classes)
+            # self.model.fc = nn.Linear(num_ftrs, num_classes)
+            self.model.fc = nn.Sequential(
+                nn.Linear(num_ftrs, 256),
+                nn.BatchNorm1d(256),
+                nn.ReLU(),
+                nn.Dropout(0.5),
+                nn.Linear(256, num_classes)
+            )
         elif self.model_name == "resnet50":
             # load pretrained model
             self.model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2) if pretrained else resnet50()
@@ -44,7 +51,14 @@ class Image2VADModel(nn.Module):
                     param.requires_grad = False
             # add layer for fine tuning
             num_ftrs = self.model.fc.in_features
-            self.model.fc = nn.Linear(num_ftrs, num_classes)
+            # self.model.fc = nn.Linear(num_ftrs, num_classes)
+            self.model.fc = nn.Sequential(
+                nn.Linear(num_ftrs, 256),
+                nn.BatchNorm1d(256),
+                nn.ReLU(),
+                nn.Dropout(0.5),
+                nn.Linear(256, num_classes)
+            )
         else:
             raise NotImplementedError(f"model {model_name} is not implemented")
     def forward(self, x: torch.Tensor) -> torch.Tensor:

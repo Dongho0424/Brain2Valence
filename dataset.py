@@ -244,3 +244,54 @@ class BrainValenceDataset(Dataset):
                                            shape_y_diff_2, shape_x_diff_1, shape_x_diff_2), mode='constant', value=0)
 
         return brain_3d   
+
+class EmoticDataset(Dataset):
+    def __init__(self,
+                 data_path,
+                 split,
+                 emotic_annotations: pd.DataFrame,
+                 task_type="B",
+                 context_transform=None,
+                 body_transform=None,
+                 normalize=False,
+                 ):
+
+        self.data_path = data_path
+        self.split = split  # train, val, test
+        self.metadata = emotic_annotations
+        self.task_type = task_type # ['B', 'BI']
+        self.context_transform = context_transform
+        self.body_transform = body_transform
+        self.normalize = normalize
+
+    def __len__(self):
+        return len(self.metadata)
+    
+    def __getitem__(self, idx):
+
+        sample = self.metadata.iloc[idx]
+        
+        context_image = Image.open(os.path.join(self.data_path, sample['folder'], sample['filename']))
+        
+        use_body = 'B' in self.task_type # "B"ody 
+        
+        # crop body from image
+        # using bbox
+        if use_body:
+            bbox = sample['bbox']
+            body_image = context_image.crop((bbox[0], bbox[1], bbox[2], bbox[3]))
+
+        # use transform
+        if self.context_transform is not None:
+            context_image = context_image.convert("RGB")
+            context_image = self.context_transform(context_image)
+        if self.body_transform is not None:
+            body_image = body_image.convert("RGB")
+            body_image = self.body_transform(body_image)
+
+        # get VAD
+        valence = sample['valence'] / 10.0 if self.normalize else sample['valence']
+        arousal = sample['arousal'] / 10.0 if self.normalize else sample['arousal']
+        dominance = sample['dominance'] / 10.0 if self.normalize else sample['dominance']
+
+        return context_image, body_image, valence, arousal, dominance

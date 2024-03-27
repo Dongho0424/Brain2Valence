@@ -1,35 +1,6 @@
-// {
-//     "version": "0.2.0",
-//     "configurations": [
-//         {
-//             "name": "Python: Train Brain2Valence",
-//             "type": "python",
-//             "request": "launch",
-//             "program": "${workspaceFolder}/main.py",
-//             "console": "integratedTerminal",
-//             "args": [
-//                 "--exec_mode", "train",
-//                 "--wandb-name", "test",
-//                 "--wandb-project", "Brain2Valence",
-//                 "--wandb-entity", "donghochoi",
-//                 "--epochs", "100",
-//                 "--batch-size", "32",
-//                 "--lr", "1e-4",
-//                 "--weight-decay", "0.0001",
-//                 "--seed", "42",
-//                 "--criterion", "mae"
-//             ],
-//             "env": {
-//                 "CUDA_VISIBLE_DEVICES": "3"
-//             }
-//         }
-//     ]
-// }
-
 {
     "version": "0.2.0",
     "configurations": [
-        
         {
             "name": "reg_brain3d: train",
             "type": "python",
@@ -139,6 +110,37 @@
                 "--data", "brain3d",
                 "--task-type", "img2vad",
                 "--best"
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "0"
+            }
+        },
+        {
+            "name": "emotic",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--exec_mode", "train",
+                "--all-subjects",
+                "--wandb-log",
+                "--wandb-name", "0321adam_lr_1e-4",
+                "--model-name", "0321adam_lr_1e-4",
+                "--wandb-project", "Emotic",
+                "--wandb-entity", "donghochoi",
+                "--model", "resnet18",
+                "--data", "brain3d",
+                "--epochs", "50",
+                "--batch-size", "26",
+                "--lr", "1e-4",
+                "--weight-decay", "5e-4",
+                "--optimizer", "adam",
+                "--scheduler", "step",
+                "--criterion", "emotic_L2",
+                "--task-type", "emotic",
+                "--pretrain",
+                "--backbone-freeze"
             ],
             "env": {
                 "CUDA_VISIBLE_DEVICES": "0"

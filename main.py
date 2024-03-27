@@ -3,6 +3,8 @@ import argparse
 from argparse import ArgumentParser
 from trainer import Trainer
 from predictor import Predictor
+from emotic_trainer import EmoticTrainer
+from emotic_predictor import EmoticPredictor
 from utils import set_seed
 
 def get_args():
@@ -23,7 +25,7 @@ def get_args():
     # model_name: model 저장 디렉토리 및 현재 모델의 개괄 설명 간단히
     # kind of all_subjects_res18_mae_01, subject1_res18_mae_01
     args.add_argument('--model-name', type=str, default='all_subjects',required=True, help='name of model')
-    args.add_argument('--task-type', type=str, default="reg", choices=['img2vad', 'reg', 'classif'], required=True, help='regression for valence(float), multiple classification for valence type')
+    args.add_argument('--task-type', type=str, default="reg", choices=['emotic', 'img2vad', 'reg', 'classif'], required=True, help='regression for valence(float), multiple classification for valence type')
     args.add_argument('--data', type=str, default="brain3d", choices=['brain3d', 'roi'], required=True, help='data for our task. brain3d: whole brain 3d voxel, roi: well-picked brain 1d array. CAUTION: roi is only with particular subjects.')
     args.add_argument('--all-subjects', action='store_true', default=False, help='train or predict for all subjects')
     args.add_argument('--subj', type=int, default=1, choices=[1,2,5,7], help='train or predict for particular subject number')
@@ -31,7 +33,7 @@ def get_args():
     args.add_argument('--seed', type=int, default=42, help='random seed')
 
     # for train
-    args.add_argument("--criterion", type=str, default="mae", choices=["mse", "mae", "ce"], help="Criterion. mse or mae for valence, crossentropy for classification") 
+    args.add_argument("--criterion", type=str, default="mae", choices=["mse", "mae", "ce", "emotic_L2", "emotic_SL1"], help="Criterion. mse or mae for valence, crossentropy for classification") 
     args.add_argument("--epochs", type=int, default=100, help="Number of epochs")
     args.add_argument("--batch-size", type=int, default=16, help="Batch size")
     args.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
@@ -70,11 +72,21 @@ def get_args():
 def main(args):
 
     if args.exec_mode == "train":
-        trainer = Trainer(args=args)
-        trainer.train()
+
+        if args.task_type == "emotic":
+            trainer = EmoticTrainer(args=args)
+            trainer.train()
+        else:
+            trainer = Trainer(args=args)
+            trainer.train()
     elif args.exec_mode == "predict":
-        predictor = Predictor(args=args)
-        predictor.predict()
+
+        if args.task_type == "emotic":
+            predictor = EmoticPredictor(args=args)
+            predictor.predict()
+        else:
+            predictor = Predictor(args=args)
+            predictor.predict()
     else:
         raise NotImplementedError(f'exec_mode {args.exec_mode} is not implemented')
     
