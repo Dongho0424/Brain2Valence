@@ -250,7 +250,7 @@ class EmoticDataset(Dataset):
                  data_path,
                  split,
                  emotic_annotations: pd.DataFrame,
-                 task_type="B",
+                 model_type="B",
                  context_transform=None,
                  body_transform=None,
                  normalize=False,
@@ -259,7 +259,7 @@ class EmoticDataset(Dataset):
         self.data_path = data_path
         self.split = split  # train, val, test
         self.metadata = emotic_annotations
-        self.task_type = task_type # ['B', 'BI']
+        self.model_type = model_type # ['B', 'BI']
         self.context_transform = context_transform
         self.body_transform = body_transform
         self.normalize = normalize
@@ -273,7 +273,7 @@ class EmoticDataset(Dataset):
         
         context_image = Image.open(os.path.join(self.data_path, sample['folder'], sample['filename']))
         
-        use_body = 'B' in self.task_type # "B"ody 
+        use_body = 'B' in self.model_type # "B"ody 
         
         # crop body from image
         # using bbox

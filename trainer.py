@@ -88,7 +88,7 @@ class Trainer:
     def get_model(self):
         if self.args.task_type == 'img2vad':
             model = Image2VADModel(
-                model_name=self.args.model,
+                backbone=self.args.model,
                 num_classif=self.args.num_classif,
                 pretrained=self.args.pretrain,
                 backbone_freeze=self.args.backbone_freeze,

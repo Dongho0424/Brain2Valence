@@ -4,70 +4,143 @@ import utils
 from typing import List
 from monai.networks.nets import resnet
 from resnet import ResNetwClf
-from torchvision.models import resnet18, ResNet18_Weights, resnet50, ResNet50_Weights
+from torchvision.models import resnet18, ResNet18_Weights, resnet50, ResNet50_Weights, __dict__
 # freeze, res18
 # TODO: cover context image given task type (B, BI)
 class Image2VADModel(nn.Module):
     def __init__(self,
-                 model_name: str = "resnet18",
-                 num_classif: int = 3,
+                 backbone: str = "resnet18",
+                 model_type: str = "BI",
                  pretrained=True,
                  backbone_freeze=False,
                  ):
         super().__init__()
 
-        self.model_name = model_name
-        print("current model backbone:", model_name)
+        self.backbone = backbone
+        assert model_type in ["B", "BI", "I"], f"model type {model_type} is not implemented"
+        self.model_type = model_type
+        print("Model backbone:", backbone)
+        print("Model type:", model_type)
 
-        # the number of class for VAD regression: 3
-        # valence, arousal, dominance, respectively
-        # num_classes = num_classif if task_type == "classif" else 3
-        num_classes = 3
-        print("num_classes:", num_classes)
 
-        if self.model_name == "resnet18":
-            # load pretrained model
-            self.model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1) if pretrained else resnet18()
-            # freeze parameters
-            if backbone_freeze:
-                for param in self.model.parameters():
-                    param.requires_grad = False
-            # add layer for fine tuning
-            num_ftrs = self.model.fc.in_features
-            # self.model.fc = nn.Linear(num_ftrs, num_classes)
-            self.model.fc = nn.Sequential(
-                nn.Linear(num_ftrs, 256),
+        if self.backbone == "resnet18":
+
+            # context model
+            model_context = __dict__[self.backbone](num_classes=365)
+            context_state_dict = torch.load('/home/dongho/brain2valence/data/places/resnet18_state_dict.pth')
+            model_context.load_state_dict(context_state_dict)
+            self.context_last_feature = list(model_context.children())[-1].in_features
+            self.model_context = nn.Sequential(*list(model_context.children())[:-1])
+
+            # body model
+            model_body = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
+            self.body_last_feature = list(model_body.children())[-1].in_features
+            self.model_body = nn.Sequential(*list(model_body.children())[:-1])
+
+            # fusion two backbones corresponding to model type
+            in_features = 0
+            if self.model_type == "B": in_features = self.body_last_feature
+            elif self.model_type == "I": in_features = self.context_last_feature
+            elif self.model_type == "BI": in_features = self.context_last_feature + self.body_last_feature
+            else: raise NotImplementedError(f"model type {model_type} is not implemented")
+
+            self.model_fusion = nn.Sequential(
+                nn.Linear(in_features, 256),
                 nn.BatchNorm1d(256),
                 nn.ReLU(),
-                nn.Dropout(0.5),
-                nn.Linear(256, num_classes)
+                nn.Dropout(p=0.5)
             )
-        elif self.model_name == "resnet50":
-            # load pretrained model
-            self.model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2) if pretrained else resnet50()
+            self.fc_cat = nn.Linear(256, 26)
+            self.fc_cont = nn.Linear(256, 3)
+            
             # freeze parameters
             if backbone_freeze:
-                for param in self.model.parameters():
+                for param in self.model_body.parameters():
+                    param.requires_grad = False
+                for param in self.model_context.parameters():
+                    param.requires_grad = False
+
+        elif self.backbone == "resnet50":
+            # temporarily
+            assert self.model_type == 'B', "resnet50 is only for model_type: B"
+            # load pretrained model
+            self.model_body = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2) if pretrained else resnet50()
+            # freeze parameters
+            if backbone_freeze:
+                for param in self.model_body.parameters():
                     param.requires_grad = False
             # add layer for fine tuning
-            num_ftrs = self.model.fc.in_features
+            num_ftrs = self.model_body.fc.in_features
             # self.model.fc = nn.Linear(num_ftrs, num_classes)
-            self.model.fc = nn.Sequential(
+            self.model_body.fc = nn.Sequential(
                 nn.Linear(num_ftrs, 256),
                 nn.BatchNorm1d(256),
                 nn.ReLU(),
                 nn.Dropout(0.5),
-                nn.Linear(256, num_classes)
+                nn.Linear(256, 3)
             )
         else:
-            raise NotImplementedError(f"model {model_name} is not implemented")
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+            raise NotImplementedError(f"model {backbone} is not implemented")
+        
+    def forward(self, x_body: torch.Tensor = None, x_context: torch.Tensor = None):
         """
-        - x: (B, 3, 224, 224)
-        - out: (B, num_classif)
-            - # valence, arousal, dominance, respectively
+        - body: (B, 3, 224, 224), (B, 3, 112, 112)
+        - out: (B, 26), (B, 3)
+            - 26 for emotion categories
+            - 3 for vad
         """
-        return self.model(x)
+        assert not (self.model_type in "B" and x_body is None), "body is required for model type B"
+        assert not (self.model_type in "I" and x_context is None), "context is required for model type I"
+
+        if self.model_type == 'B':
+            x_body = self.model_body(x_body)
+            x_body = x_body.view(-1, self.body_last_feature)
+            fuse_out = self.model_fusion(x_body)
+        elif self.model_type == 'I':
+            x_context = self.model_context(x_context)
+            x_context = x_context.view(-1, self.context_last_feature)
+            fuse_out = self.model_fusion(x_context)
+        elif self.model_type == 'BI':
+            x_body = self.model_body(x_body)
+            x_body = x_body.view(-1, self.body_last_feature)
+
+            x_context = self.model_context(x_context)
+            x_context = x_context.view(-1, self.context_last_feature)
+            fuse_in = torch.cat((x_body, x_context), 1)
+            fuse_out = self.model_fusion(fuse_in)
+            
+        cat_out = self.fc_cat(fuse_out)
+        cont_out = self.fc_cont(fuse_out)
+        return cat_out, cont_out
+
+class Emotic(nn.Module):
+    def __init__(self, num_context_features, num_body_features):
+        super(Emotic,self).__init__()
+
+        self.num_context_features = num_context_features
+        self.num_body_features = num_body_features
+        self.fc1 = nn.Linear((self.num_context_features + num_body_features), 256)
+        self.bn1 = nn.BatchNorm1d(256)
+        self.relu = nn.ReLU()
+        self.d1 = nn.Dropout(p=0.5)
+
+        self.fc_cat = nn.Linear(256, 26)
+        self.fc_cont = nn.Linear(256, 3)
+
+
+    def forward(self, x_context, x_body):
+        context_features = x_context.view(-1, self.num_context_features)
+        body_features = x_body.view(-1, self.num_body_features)
+        fuse_features = torch.cat((context_features, body_features), 1)
+        fuse_out = self.fc1(fuse_features)
+        fuse_out = self.bn1(fuse_out)
+        fuse_out = self.relu(fuse_out)
+        fuse_out = self.d1(fuse_out)   
+            
+        cat_out = self.fc_cat(fuse_out)
+        cont_out = self.fc_cont(fuse_out)
+        return cat_out, cont_out
+
 
 class Brain2ValenceModel(nn.Module):
     def __init__(self,

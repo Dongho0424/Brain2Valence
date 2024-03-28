@@ -10,7 +10,7 @@ from tqdm import tqdm
 from dataset import EmoticDataset
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.metrics import mean_squared_error, r2_score, average_precision_score
 
 class EmoticPredictor:
     def __init__(self, args):
@@ -59,7 +59,7 @@ class EmoticPredictor:
         test_dataset = EmoticDataset(data_path=data_path,
                                     split='test',
                                     emotic_annotations=test_data,
-                                    task_type="B",
+                                    model_type="B",
                                     context_transform=test_context_transform,
                                     body_transform=test_body_transform,
                                     normalize=True,
@@ -73,9 +73,10 @@ class EmoticPredictor:
     
     def load_model(self, args, use_best=True) -> nn.Module :
         model = Image2VADModel(
-            model_name=self.args.model,
-            num_classif=self.args.num_classif,
-            pretrained=self.args.pretrain
+            backbone=self.args.model,
+            model_type=self.args.model_type,
+            pretrained=self.args.pretrain,
+            backbone_freeze=self.args.backbone_freeze,
         )
         
         model_name = args.model_name # ex) "all_subjects_res18_mae_2"
@@ -99,33 +100,44 @@ class EmoticPredictor:
         self.model.cuda()
         self.model.eval()
 
-        pred_vad = torch.Tensor().cuda()
-        gt_vad = torch.Tensor().cuda()
+        pred_cat_tensor = torch.Tensor().cuda()
+        gt_cat_tensor = torch.Tensor().cuda()
+
+        pred_vad_tensor = torch.Tensor().cuda()
+        gt_vad_tensor = torch.Tensor().cuda()
 
         with torch.no_grad():
-            for i, (context_image, body_image, valence, arousal, dominance) in tqdm(enumerate(self.test_dl)):
+            for i, (context_image, body_image, valence, arousal, dominance, category) in tqdm(enumerate(self.test_dl)):
 
                 context_image = context_image.float().cuda()
                 body_image = body_image.float().cuda()
-                valence = valence.float().cuda()
-                arousal = arousal.float().cuda()
-                dominance = dominance.float().cuda()
+                gt_cat = category.float().cuda()
+                gt_vad = torch.stack([valence, arousal, dominance], dim=1).float().cuda()
+                pred_cat, pred_vad = self.model(body_image, context_image) # (1, 26), (1, 3)
 
-                pred = self.model(body_image) # (1, 3)
-                pred_vad = torch.cat((pred_vad, pred), dim=0)
-                
-                gt = torch.stack([valence, arousal, dominance], dim=1).float().cuda() # (1, 3)
-                gt_vad = torch.cat((gt_vad, gt), dim=0)
+                pred_cat_tensor = torch.cat((pred_cat_tensor, pred_cat), 0)
+                gt_cat_tensor = torch.cat((gt_cat_tensor, gt_cat), 0)
 
-        vad_mae = F.l1_loss(pred_vad, gt_vad, reduction='none')
+                pred_vad_tensor = torch.cat((pred_vad_tensor, pred_vad), 0)
+                gt_vad_tensor = torch.cat((gt_vad_tensor, gt_vad), 0)
+
+        # evaluation for categorical emotion
+        ap = self.calculate_AP_score(pred_cat_tensor.cpu().numpy(), gt_cat_tensor.cpu().numpy())
+        ap_mean = np.mean(ap)
+        ap_dict = {f"AP_class_{i+1}": ap for i, ap in enumerate(ap)}
+
+        wandb.log({"AP": ap_dict, "AP_mean": ap_mean})
+        
+        # evalutation for VAD
+        vad_mae = F.l1_loss(pred_vad_tensor, gt_vad_tensor, reduction='none')
         v_mae = vad_mae[:, 0].mean().item()
         a_mae = vad_mae[:, 1].mean().item()
         d_mae = vad_mae[:, 2].mean().item()
         total_mae = vad_mae.mean().item()
 
-        v_corr = r2_score(gt_vad[:, 0].cpu().numpy(), pred_vad[:, 0].cpu().numpy())
-        a_corr = r2_score(gt_vad[:, 1].cpu().numpy(), pred_vad[:, 1].cpu().numpy())
-        d_corr = r2_score(gt_vad[:, 2].cpu().numpy(), pred_vad[:, 2].cpu().numpy())
+        v_corr = r2_score(gt_vad_tensor[:, 0].cpu().numpy(), pred_vad_tensor[:, 0].cpu().numpy())
+        a_corr = r2_score(gt_vad_tensor[:, 1].cpu().numpy(), pred_vad_tensor[:, 1].cpu().numpy())
+        d_corr = r2_score(gt_vad_tensor[:, 2].cpu().numpy(), pred_vad_tensor[:, 2].cpu().numpy())
 
         print("valence mae: {:.4f}, arousal mae: {:.4f}, dominance mae: {:.4f}, total mae: {:.4f}".format(v_mae, a_mae, d_mae, total_mae))
         print("valence corr: {:.4f}, arousal corr: {:.4f}, dominance corr: {:.4f} ".format(v_corr, a_corr, d_corr))
@@ -135,7 +147,7 @@ class EmoticPredictor:
 
         for index, vad in enumerate(['valence', 'arousal', 'dominance']):
             # Plot true vs pred valence 
-            plt.scatter(gt_vad[:, index].cpu().numpy(), pred_vad[:, index].cpu().numpy(), alpha=0.2)
+            plt.scatter(gt_vad_tensor[:, index].cpu().numpy(), pred_vad_tensor[:, index].cpu().numpy(), alpha=0.2)
             plt.xlabel(f"True {vad}")
             plt.ylabel(f"Pred {vad}")
             plt.plot([0, 1], [0, 1], color='red', linestyle='--')
@@ -157,3 +169,7 @@ class EmoticPredictor:
         log_name += "momentum={}-".format(args.momentum)
         log_name += "seed={}".format(args.seed)
         return log_name
+    
+    def calculate_AP_score(self, cat_preds, cat_labels):
+        ap = [average_precision_score(cat_labels[i, :], cat_preds[i, :]) for i in range(26)]
+        return ap

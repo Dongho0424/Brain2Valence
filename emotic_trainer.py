@@ -17,12 +17,19 @@ class EmoticTrainer:
     def __init__(self, args):
         self.args = args
 
+        self.set_device()
         self.train_dl, self.val_dl, self.num_train, self.num_val = self.prepare_dataloader()
         self.set_wandb_config()
         self.model: nn.Module = self.get_model()
         self.optimizer = self.get_optimizer()
         self.scheduler = self.get_scheduler()
-        self.criterion = self.get_criterion()
+        self.disc_loss, self.vad_loss = self.get_criterion()
+    
+    def set_device(self):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print('Device:', self.device)
+        print('Current cuda device:', torch.cuda.current_device())
+        print('Count of using GPUs:', torch.cuda.device_count())
 
     def set_wandb_config(self):
         wandb_project = self.args.wandb_project
@@ -65,7 +72,7 @@ class EmoticTrainer:
         train_dataset = EmoticDataset(data_path=data_path,
                                       split='train',
                                       emotic_annotations=train_data,
-                                      task_type="B",
+                                      model_type="B",
                                       context_transform=train_context_transform,
                                       body_transform=train_body_transform,
                                       normalize=True,
@@ -74,7 +81,7 @@ class EmoticTrainer:
         val_dataset = EmoticDataset(data_path=data_path,
                                     split='val',
                                     emotic_annotations=val_data,
-                                    task_type="B",
+                                    model_type="B",
                                     context_transform=test_context_transform,
                                     body_transform=test_body_transform,
                                     normalize=True,
@@ -89,8 +96,8 @@ class EmoticTrainer:
 
     def get_model(self):
         model = Image2VADModel(
-            model_name=self.args.model,
-            num_classif=self.args.num_classif,
+            backbone=self.args.model,
+            model_type=self.args.model_type,
             pretrained=self.args.pretrain,
             backbone_freeze=self.args.backbone_freeze,
         )
@@ -102,14 +109,11 @@ class EmoticTrainer:
         params = self.model.parameters()
 
         if self.args.optimizer == "sgd":
-            optimizer = torch.optim.SGD(
-                params, lr=self.args.lr, momentum=self.args.momentum, weight_decay=self.args.weight_decay)
+            optimizer = torch.optim.SGD(params, lr=self.args.lr, momentum=self.args.momentum, weight_decay=self.args.weight_decay)
         elif self.args.optimizer == "adam":
-            optimizer = torch.optim.Adam(
-                params, lr=self.args.lr, weight_decay=self.args.weight_decay)
+            optimizer = torch.optim.Adam(params, lr=self.args.lr, weight_decay=self.args.weight_decay)
         elif self.args.optimizer == "adamw":
-            optimizer = torch.optim.AdamW(
-                params, lr=self.args.lr, weight_decay=self.args.weight_decay)
+            optimizer = torch.optim.AdamW(params, lr=self.args.lr, weight_decay=self.args.weight_decay)
         return optimizer
 
     def get_scheduler(self):
@@ -122,50 +126,47 @@ class EmoticTrainer:
         return scheduler
 
     def get_criterion(self):
-        if self.args.criterion == "mse":
-            criterion = nn.MSELoss()
-        elif self.args.criterion == "mse_sum":
-            criterion = nn.MSELoss(reduction='sum')
-        elif self.args.criterion == "mae":
-            criterion = nn.L1Loss()
-        elif self.args.criterion == "ce":
-            criterion = nn.CrossEntropyLoss()
-        elif self.args.criterion == "emotic_L2":
-            criterion = ContinuousLoss_L2(margin=0.1)
+        disc = DiscreteLoss(weight_type='dynamic', device=self.device)
+        if self.args.criterion == "emotic_L2":
+            cont = ContinuousLoss_L2(margin=0.1)
         elif self.args.criterion == "emotic_SL1":
-            criterion = ContinuousLoss_SL1(margin=0.1)
-        return criterion
+            cont = ContinuousLoss_SL1(margin=0.1)
+        else: raise NotImplementedError(f'criterion {self.args.criterion} is not implemented')
+
+        return disc, cont
     
     def train(self):
-        #### enter Training ###
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print('Device:', device)
-        print('Current cuda device:', torch.cuda.current_device())
-        print('Count of using GPUs:', torch.cuda.device_count())
-        #### enter Training ###
+        print("#### enter Training ####")
+        print("#### enter Training ####")
+        print("#### enter Training ####")
 
         best_val_loss = float("inf")
+        # now set equal
+        cat_loss_param = 0.5
+        vad_loss_param = 0.5
 
         for epoch in range(self.args.epochs):
             self.model.cuda()
             self.model.train()
             train_loss = 0
 
-            for i, (context_image, body_image, valence, arousal, dominance) in tqdm(enumerate(self.train_dl)):
+            for i, (context_image, body_image, valence, arousal, dominance, category) in tqdm(enumerate(self.train_dl)):
 
                 context_image = context_image.float().cuda()
                 body_image = body_image.float().cuda()
-                valence = valence.float().cuda()
-                arousal = arousal.float().cuda()
-                dominance = dominance.float().cuda()
+                gt_cat = category.float().cuda()
+                gt_vad = torch.stack([valence, arousal, dominance], dim=1).float().cuda()
 
-                pred = self.model(body_image)
-                gt = torch.stack([valence, arousal, dominance], dim=1).float().cuda()
+                pred_cat, pred_vad = self.model(body_image, context_image)
+
+                loss_cat = self.disc_loss(pred_cat, gt_cat)
+                loss_vad = self.vad_loss(pred_vad, gt_vad)
+                loss = cat_loss_param * loss_cat + vad_loss_param * loss_vad
 
                 self.optimizer.zero_grad()
-                loss = self.criterion(pred, gt) 
                 loss.backward()
                 self.optimizer.step()
+
                 train_loss += loss.item()
 
             train_loss /= self.num_train
@@ -177,17 +178,18 @@ class EmoticTrainer:
             self.model.eval()
             val_loss = 0
             with torch.no_grad():
-                for i, (context_image, body_image, valence, arousal, dominance) in tqdm(enumerate(self.val_dl)):
+                for i, (context_image, body_image, valence, arousal, dominance, category) in tqdm(enumerate(self.val_dl)):
 
                     context_image = context_image.float().cuda()
                     body_image = body_image.float().cuda()
-                    valence = valence.float().cuda()
-                    arousal = arousal.float().cuda()
-                    dominance = dominance.float().cuda()
+                    gt_cat = category.float().cuda()
+                    gt_vad = torch.stack([valence, arousal, dominance], dim=1).float().cuda()
 
-                    pred = self.model(body_image)
-                    gt = torch.stack([valence, arousal, dominance], dim=1).float().cuda()
-                    loss = self.criterion(pred, gt)
+                    pred_cat, pred_vad = self.model(body_image, context_image)
+                    loss_cat = self.disc_loss(pred_cat, gt_cat)
+                    loss_vad = self.vad_loss(pred_vad, gt_vad)
+
+                    loss = cat_loss_param * loss_cat + vad_loss_param * loss_vad
                     val_loss += loss.item()
                 
                 val_loss /= self.num_val
