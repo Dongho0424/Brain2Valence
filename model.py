@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import utils
 from typing import List
 from monai.networks.nets import resnet
@@ -109,7 +110,7 @@ class Image2VADModel(nn.Module):
             fuse_in = torch.cat((x_body, x_context), 1)
             fuse_out = self.model_fusion(fuse_in)
             
-        cat_out = self.fc_cat(fuse_out)
+        cat_out = F.sigmoid(self.fc_cat(fuse_out))
         cont_out = self.fc_cont(fuse_out)
         return cat_out, cont_out
 

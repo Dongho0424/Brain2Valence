@@ -64,7 +64,9 @@ def get_args():
     img2vad_args = args.add_argument_group('img2vad')
     img2vad_args.add_argument('--pretrain', action='store_true', default=True, help='Use pretrained cnn backbone')
     img2vad_args.add_argument('--backbone-freeze', action='store_true', default=False, help='Freeze pretrained backbone')
-    img2vad_args.add_argument("--model-type", type=str, default="BI", choices=["BI", "B", "I"], help="BI: use both body and image") 
+    
+    emotic_args = args.add_argument_group('emotic')
+    emotic_args.add_argument("--model-type", type=str, default="BI", choices=["BI", "B", "I"], help="BI: use both body and image") 
     
     args = args.parse_args()
 
