@@ -6,6 +6,7 @@ from torch.utils.data import Dataset
 from PIL import Image
 from torchvision import transforms
 from sklearn.model_selection import train_test_split
+import utils
 
 class BrainValenceDataset(Dataset):
     def __init__(self,
@@ -253,7 +254,6 @@ class EmoticDataset(Dataset):
                  context_transform=None,
                  body_transform=None,
                  normalize=False,
-                 coco_only=False,
                  ):
 
         self.data_path = data_path
@@ -300,3 +300,115 @@ class EmoticDataset(Dataset):
             cat_label[cat] = 1
 
         return context_image, body_image, valence, arousal, dominance, cat_label
+
+# Create New Dataset 
+class BrainDataset(Dataset):
+    """
+    Dataset for brain data guidance while image => emotion category prediction
+    """
+    def __init__(self,
+                 subjects,
+                 split,
+                 data_type='brain3d',
+                 model_type="B",
+                 context_transform=None,
+                 body_transform=None,
+                 normalize=False,
+                 ):
+
+        self.coco_data_path = "/home/dongho/brain2valence/data/emotic"
+        self.nsd_data_path="/home/juhyeon/fsx/proj-medarc/fmri/natural-scenes-dataset/webdataset_avg_split"
+        self.subjects = subjects
+        self.split = split
+        self.data_type = data_type
+        self.model_type = model_type # ['B', 'BI']
+        self.context_transform = context_transform
+        self.body_transform = body_transform
+        self.normalize = normalize
+
+        emotic_data = utils.get_emotic_df(is_split=False)
+        self.metadata = utils.get_emotic_coco_nsd_df(emotic_data=emotic_data, 
+                                                     split=split, 
+                                                     subjects=subjects)
+        
+
+    def __len__(self):
+        return len(self.metadata)
+    
+    def __getitem__(self, idx):
+
+        sample = self.metadata.iloc[idx]
+        
+        context_image = Image.open(os.path.join(self.coco_data_path, sample['folder'], sample['filename']))
+        
+        use_body = 'B' in self.model_type # "B"ody 
+        
+        # crop body from image
+        # using bbox
+        if use_body:
+            bbox = sample['bbox']
+            body_image = context_image.crop((bbox[0], bbox[1], bbox[2], bbox[3]))
+
+        # use transform
+        if self.context_transform is not None:
+            context_image = context_image.convert("RGB")
+            context_image = self.context_transform(context_image)
+        if self.body_transform is not None:
+            body_image = body_image.convert("RGB")
+            body_image = self.body_transform(body_image)
+
+        # get VAD
+        valence = sample['valence'] / 10.0 if self.normalize else sample['valence']
+        arousal = sample['arousal'] / 10.0 if self.normalize else sample['arousal']
+        dominance = sample['dominance'] / 10.0 if self.normalize else sample['dominance']
+
+        # get category label torch.tensor
+        cat_label = torch.zeros(26)
+        for cat in  sample['category']:
+            cat_label[cat] = 1
+
+        # Because there are 3 snapshots of both brain3d and roi
+        repeat_index = idx % 3
+
+        data = None
+        # kind of a naive way.. but it works
+        split = sample['brain3d'].split('_')[0]
+
+        if self.data_type == 'brain3d':
+            brain_3d = torch.from_numpy(np.load(os.path.join(self.nsd_data_path, split, sample['brain3d'])))  # (3, *, *, *)
+            brain_3d = brain_3d[repeat_index]
+            brain_3d = self.reshape_brain3d(brain_3d)  # (96, 96, 96)
+
+            data = brain_3d
+        elif self.data_type == 'roi':
+            if len(self.subjects) > 1:
+                raise ValueError("Only one subject's roi data is available")
+            roi = torch.from_numpy(np.load(os.path.join(self.nsd_data_path, split, sample['roi'])))  # (3, *)
+            roi = roi[repeat_index]
+
+            data = roi
+        else: 
+            raise ValueError("data_type should be either 'brain3d' or 'roi'")
+
+
+        return context_image, body_image, valence, arousal, dominance, cat_label, data
+
+    def reshape_brain3d(self, brain_3d: torch.Tensor):
+        # brain_3d: (*, *, *)
+        # return: (96, 96, 96)
+
+        shape_x_diff = 96 - brain_3d.shape[0]
+        shape_y_diff = 96 - brain_3d.shape[1]
+        shape_z_diff = 96 - brain_3d.shape[2]
+
+        shape_x_diff_1 = shape_x_diff // 2
+        shape_x_diff_2 = shape_x_diff - shape_x_diff_1
+        shape_y_diff_1 = shape_y_diff // 2
+        shape_y_diff_2 = shape_y_diff - shape_y_diff_1
+        shape_z_diff_1 = shape_z_diff // 2
+        shape_z_diff_2 = shape_z_diff - shape_z_diff_1
+
+        brain_3d = torch.nn.functional.pad(brain_3d, (shape_z_diff_1, shape_z_diff_2, shape_y_diff_1,
+                                           shape_y_diff_2, shape_x_diff_1, shape_x_diff_2), mode='constant', value=0)
+
+        return brain_3d   

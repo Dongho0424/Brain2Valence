@@ -564,8 +564,7 @@ def get_emotic_coco_nsd_df(emotic_data, split='train', seed=42, subjects=[1, 2, 
     emotic_coco_nsd = pd.merge(emotic_coco, metadata, on='image_id', how='inner')\
         .drop(columns=['img', 'trial', 'num_uniques'])\
         .rename(columns={'voxel': 'roi', 'mri': 'brain3d'})
-    
-    print(f"length of dataset {split}: {len(emotic_coco_nsd)}")
+
     return emotic_coco_nsd
 
 def get_emotic_categories():
