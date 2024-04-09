@@ -56,6 +56,9 @@ class EmoticPredictor:
         _, _, test_context_transform, test_body_transform =\
             utils.get_transforms_emotic()
 
+        if self.args.coco_only:
+            test_data = test_data[test_data['folder'] == 'mscoco/images']
+
         test_dataset = EmoticDataset(data_path=data_path,
                                     split='test',
                                     emotic_annotations=test_data,

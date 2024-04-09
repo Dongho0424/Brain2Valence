@@ -14,6 +14,8 @@ import wandb
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import WeightedRandomSampler
 from torchvision.transforms import v2
+from sklearn.model_selection import train_test_split
+
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # TODO: label 수를 낮춰서 negative, neutral, positive 감정 label로 다운시키고, 그것을 classification 하는 task도 생각할 수 있겠다.
@@ -444,14 +446,14 @@ def get_transforms_emotic():
 
     return train_context_transform, train_body_transform, test_context_transform, test_body_transform
 
-
-def get_emotic_df():
+def get_emotic_df(is_split=True, coco_only=False):
     file_name_emotic_annot = '/home/dongho/brain2valence/data/emotic_annotations.mat'
     data = scipy.io.loadmat(file_name_emotic_annot, simplify_cells=True)
     emotic_annotations = data['train'] + data['test'] + data['val']
 
     folders = []
     filenames = []
+    image_ids = []
     bboxes = []
     valences = []
     arousals = []
@@ -464,12 +466,15 @@ def get_emotic_df():
 
         folder = sample['folder']
         filename = sample['filename']
+        # Assign -1 to image_id if there is no image_id
+        image_id = sample.get('original_database', {}).get('info', {}).get('image_id', -1)
         people = [sample['person']] if isinstance(sample['person'], dict) else sample['person']
 
         for p in people:
 
             folders.append(folder)
             filenames.append(filename)
+            image_ids.append(image_id)
             bboxes.append(p['body_bbox'])
 
             # for valence, arousal, dominance
@@ -499,23 +504,69 @@ def get_emotic_df():
 
     annotations = pd.DataFrame({'folder': folders,
                                 'filename': filenames,
+                                'image_id': image_ids,
                                 'bbox': bboxes,
                                 'valence': valences,
                                 'arousal': arousals,
                                 'dominance': dominances,
                                 'category': categories})
+    if is_split:
+        # split data
+        # train: 70%, val: 15%, test: 15%
+        total_len = len(annotations)
+        train_len = int(total_len * 0.7)
+        val_len = int(total_len * 0.15)
 
-    # split data
-    # train: 70%, val: 15%, test: 15%
-    total_len = len(annotations)
-    train_len = int(total_len * 0.7)
-    val_len = int(total_len * 0.15)
+        train_data = annotations.iloc[:train_len].dropna().reset_index(inplace=False, drop=True)
+        val_data = annotations.iloc[train_len:train_len+val_len].dropna().reset_index(inplace=False, drop=True)
+        test_data = annotations.iloc[train_len+val_len:].dropna().reset_index(inplace=False, drop=True)
 
-    train_data = annotations.iloc[:train_len].dropna().reset_index(inplace=False, drop=True)
-    val_data = annotations.iloc[train_len:train_len+val_len].dropna().reset_index(inplace=False, drop=True)
-    test_data = annotations.iloc[train_len+val_len:].dropna().reset_index(inplace=False, drop=True)
+        return train_data, val_data, test_data
+    else:
+        return annotations.dropna().reset_index(inplace=False, drop=True) 
 
-    return train_data, val_data, test_data
+def get_emotic_coco_nsd_df(emotic_data, split='train', seed=42, subjects=[1, 2, 5, 7]):
+    """
+    1. emotic data를 가져와서 mscoco 데이터를 남긴다.
+    2. metadata를 만든 다음, nsd_df로 부터 coco_id를 가져온다.
+    3. emotic+coco+metadata에 해당하는 df를 남긴 뒤, brain3d, roi 데이터를 추가한다.
+    """
+    ## emotic_df에서 mscoco 데이터만 가져오기
+    emotic_coco = emotic_data[emotic_data['folder'] == 'mscoco/images'] #(20702, 8)
+
+    ## bring nsd_df
+    file_name_nsd_stim = '/home/dongho/brain2valence/data/nsd_stim_info_merged.csv'
+    nsd_df = pd.read_csv(file_name_nsd_stim)
+
+    ## bring metadata
+    data_path="/home/juhyeon/fsx/proj-medarc/fmri/natural-scenes-dataset/webdataset_avg_split"
+    if split in ['train', 'val']:
+        dfs = [pd.read_csv(os.path.join(data_path, f'train_subj0{subj}_metadata.csv')) for subj in subjects]
+        dfs += [pd.read_csv(os.path.join(data_path, f'val_subj0{subj}_metadata.csv')) for subj in subjects]
+        metadata = pd.concat(dfs).reset_index(inplace=False, drop=True)
+        train_metadata, val_metadata = train_test_split(metadata, test_size=0.1, random_state=seed)
+        
+        metadata = train_metadata if split == 'train' else val_metadata
+    elif split == 'test':
+        dfs = [pd.read_csv(os.path.join(data_path, f'test_subj0{subj}_metadata.csv')) for subj in subjects]
+        metadata = pd.concat(dfs).reset_index(inplace=False, drop=True)
+    # rename
+    metadata = metadata.rename(columns={'coco': 'nsd_id_filename'})
+
+    # get nsd_id from numpy data
+    nsd_id = metadata['nsd_id_filename'].apply(lambda x: np.load(os.path.join(data_path, x.split('_')[0], x))[-1])
+
+    # get corresponding image_id from nsd_df
+    metadata['image_id'] = nsd_id.apply(lambda x: nsd_df.loc[x, 'cocoId'])
+
+    # emotic_coco 와 metadata의 교집합
+    # 5123, 597, 608 (152 * 4)
+    emotic_coco_nsd = pd.merge(emotic_coco, metadata, on='image_id', how='inner')\
+        .drop(columns=['img', 'trial', 'num_uniques'])\
+        .rename(columns={'voxel': 'roi', 'mri': 'brain3d'})
+    
+    print(f"length of dataset {split}: {len(emotic_coco_nsd)}")
+    return emotic_coco_nsd
 
 def get_emotic_categories():
     categories = ['Affection', 'Anger', 'Annoyance', 'Anticipation', 'Aversion', 'Confidence', 'Disapproval',

@@ -67,6 +67,7 @@ def get_args():
     
     emotic_args = args.add_argument_group('emotic')
     emotic_args.add_argument("--model-type", type=str, default="BI", choices=["BI", "B", "I"], help="BI: use both body and image") 
+    emotic_args.add_argument("--coco-only", action="store_true", help="Use EMOTIC && COCO dataset", default=False)
     
     args = args.parse_args()
 

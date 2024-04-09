@@ -68,6 +68,10 @@ class EmoticTrainer:
 
         train_context_transform, train_body_transform, test_context_transform, test_body_transform =\
             utils.get_transforms_emotic()
+        
+        if self.args.coco_only:
+            train_data = train_data[train_data['folder'] == 'mscoco/images']
+            val_data = val_data[val_data['folder'] == 'mscoco/images']
 
         train_dataset = EmoticDataset(data_path=data_path,
                                       split='train',

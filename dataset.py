@@ -45,8 +45,7 @@ class BrainValenceDataset(Dataset):
             # then split the metadata into train and test with 9:1 split
             # randomly shuffle with fixed seed in order to get same splitted index whenever call this dataset.
             fixed_suffle_seed = 0
-            self.train_metadata, self.val_metadata = train_test_split(
-                self.metadata, test_size=0.1, random_state=fixed_suffle_seed)
+            self.train_metadata, self.val_metadata = train_test_split(self.metadata, test_size=0.1, random_state=fixed_suffle_seed)
 
             if split == 'train':
                 self.metadata = self.train_metadata
@@ -254,6 +253,7 @@ class EmoticDataset(Dataset):
                  context_transform=None,
                  body_transform=None,
                  normalize=False,
+                 coco_only=False,
                  ):
 
         self.data_path = data_path
