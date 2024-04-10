@@ -5,20 +5,20 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import os
 import utils
-from model import Image2VADModel
+from model import BrainModel
 from tqdm import tqdm
-from dataset import EmoticDataset
+from dataset import BrainDataset
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import mean_squared_error, r2_score, average_precision_score
 
-class EmoticPredictor:
+class BrainPredictor():
     def __init__(self, args):
         self.args = args
 
         self.test_dl, self.num_test = self.prepare_dataloader()
         self.set_wandb_config()
-        self.model: nn.Module = self.load_model(args, use_best=self.args.best)
+        self.model: nn.Module = self.load_model(args, use_best=self.args.best)     
 
     def set_wandb_config(self):
         wandb_project = self.args.wandb_project
@@ -31,8 +31,7 @@ class EmoticPredictor:
             "brain_backbone": self.args.brain_backbone,
             "batch_size": self.args.batch_size,
             "epochs": self.args.epochs,
-            "num_train": self.num_train,
-            "num_val": self.num_val,
+            "num_test": self.num_test,
             "seed": self.args.seed,
             "weight_decay": self.args.weight_decay,
         }
@@ -45,30 +44,25 @@ class EmoticPredictor:
             config=wandb_config,
             resume="allow",
         )
-        
+
     def prepare_dataloader(self): 
-        print("Pulling EMOTIC data...")
-
-        data_path = "/home/dongho/brain2valence/data/emotic"
-
+        
         print('Prepping test dataloaders...')
 
-        _, _, test_data = utils.get_emotic_df()
+        self.subjects = [1, 2, 5, 7] if self.args.all_subjects else [self.args.subj]
 
-        _, _, test_context_transform, test_body_transform =\
-            utils.get_transforms_emotic()
+        _, _, test_context_transform, test_body_transform = utils.get_transforms_emotic()
 
         if self.args.coco_only:
             test_data = test_data[test_data['folder'] == 'mscoco/images']
 
-        test_dataset = EmoticDataset(data_path=data_path,
-                                    split='test',
-                                    emotic_annotations=test_data,
-                                    model_type="B",
-                                    context_transform=test_context_transform,
-                                    body_transform=test_body_transform,
-                                    normalize=True,
-                                    )
+        test_dataset = BrainDataset(subjects=self.subjects,
+                                     split='test',
+                                     data_type=self.args.data,
+                                     context_transform=test_context_transform,
+                                     body_transform=test_body_transform,
+                                     normalize=True,
+                                     )
 
         # always batch size is 1
         test_dl = DataLoader(test_dataset, batch_size=1, shuffle=False)
@@ -77,11 +71,13 @@ class EmoticPredictor:
         return test_dl, len(test_dataset)
     
     def load_model(self, args, use_best=True) -> nn.Module :
-        model = Image2VADModel(
-            backbone=self.args.model,
-            model_type=self.args.model_type,
-            pretrained=self.args.pretrain,
-            backbone_freeze=self.args.backbone_freeze,
+        model = BrainModel(
+            image_backbone=self.args.image_backbone,
+            image_model_type=self.args.model_type,
+            brain_backbone=self.args.brain_backbone,
+            brain_data_type=self.args.data,
+            subjects=self.subjects,
+            backbone_freeze=True,
         )
         
         model_name = args.model_name # ex) "all_subjects_res18_mae_2"
@@ -111,13 +107,15 @@ class EmoticPredictor:
         gt_vads = np.zeros((self.num_test, 3))
 
         with torch.no_grad():
-            for i, (context_image, body_image, valence, arousal, dominance, category) in tqdm(enumerate(self.test_dl)):
+            for i, (context_image, body_image, valence, arousal, dominance, category, brain_data) in tqdm(enumerate(self.test_dl)):
 
                 context_image = context_image.float().cuda()
                 body_image = body_image.float().cuda()
                 gt_cat = category.float().cuda()
                 gt_vad = torch.stack([valence, arousal, dominance], dim=1).float().cuda()
-                pred_cat, pred_vad = self.model(body_image, context_image) # (1, 26), (1, 3)
+                brain_data = brain_data.float().cuda()
+                
+                pred_cat, pred_vad = self.model(body_image, context_image, brain_data) # (1, 26), (1, 3)
 
                 pred_cats[i, :] = pred_cat.cpu().numpy()
                 gt_cats[i, :] = gt_cat.cpu().numpy()
@@ -170,18 +168,3 @@ class EmoticPredictor:
                     
             wandb.log({f"plot true {vad} vs pred {vad}": wandb.Image(plt)})
             plt.clf()
-    
-    def make_log_name(self, args):
-        log_name = ""
-        log_name += "model={}-".format(args.model).replace("/", "_")
-        log_name += "cri={}-".format(args.criterion)
-        log_name += "bs={}-".format(args.batch_size)
-        log_name += "epoch={}-".format(args.epochs)
-        log_name += "n_layers={}-".format(args.n_layers)
-        log_name += "optim={}-".format(args.optimizer)
-        log_name += "sche={}-".format(args.scheduler)
-        log_name += "lr={}-".format(args.lr)
-        log_name += "wd={}-".format(args.weight_decay)
-        log_name += "momentum={}-".format(args.momentum)
-        log_name += "seed={}".format(args.seed)
-        return log_name

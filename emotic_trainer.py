@@ -12,7 +12,6 @@ import scipy
 from dataset import EmoticDataset
 from loss import ContinuousLoss_L2, DiscreteLoss, ContinuousLoss_SL1
 
-
 class EmoticTrainer:
     def __init__(self, args):
         self.args = args
@@ -37,8 +36,9 @@ class EmoticTrainer:
         print(f"wandb {wandb_project} run {model_name}")
         wandb.login(host='https://api.wandb.ai')
         wandb_config = {
-            "model": self.args.model,
             "model_name": self.args.model_name,
+            "image_backbone": self.args.image_backbone,
+            "brain_backbone": self.args.brain_backbone,
             "batch_size": self.args.batch_size,
             "epochs": self.args.epochs,
             "num_train": self.num_train,
@@ -76,7 +76,6 @@ class EmoticTrainer:
         train_dataset = EmoticDataset(data_path=data_path,
                                       split='train',
                                       emotic_annotations=train_data,
-                                      model_type="B",
                                       context_transform=train_context_transform,
                                       body_transform=train_body_transform,
                                       normalize=True,
@@ -85,7 +84,6 @@ class EmoticTrainer:
         val_dataset = EmoticDataset(data_path=data_path,
                                     split='val',
                                     emotic_annotations=val_data,
-                                    model_type="B",
                                     context_transform=test_context_transform,
                                     body_transform=test_body_transform,
                                     normalize=True,
@@ -214,23 +212,7 @@ class EmoticTrainer:
         wandb.log({"best_val_loss": best_val_loss})
         return self.model
 
-    def make_log_name(self, args):
-        log_name = ""
-        log_name += "model={}-".format(args.model).replace("/", "_")
-        log_name += "cri={}-".format(args.criterion)
-        log_name += "bs={}-".format(args.batch_size)
-        log_name += "epoch={}-".format(args.epochs)
-        log_name += "n_layers={}-".format(args.n_layers)
-        log_name += "optim={}-".format(args.optimizer)
-        log_name += "sche={}-".format(args.scheduler)
-        log_name += "lr={}-".format(args.lr)
-        log_name += "wd={}-".format(args.weight_decay)
-        log_name += "momentum={}-".format(args.momentum)
-        log_name += "seed={}".format(args.seed)
-        return log_name
-
     def save_model(self, args, model, best):
-        log_name = self.make_log_name(args)
         model_name = args.model_name  # ex) "all_subjects_res18_mae_2"
         save_dir = os.path.join(args.save_path, model_name)
         if not os.path.exists(save_dir):

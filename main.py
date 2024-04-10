@@ -5,6 +5,8 @@ from trainer import Trainer
 from predictor import Predictor
 from emotic_trainer import EmoticTrainer
 from emotic_predictor import EmoticPredictor
+from brain_trainer import BrainTrainer
+from brain_predictor import BrainPredictor
 from utils import set_seed
 
 def get_args():
@@ -25,7 +27,7 @@ def get_args():
     # model_name: model 저장 디렉토리 및 현재 모델의 개괄 설명 간단히
     # kind of all_subjects_res18_mae_01, subject1_res18_mae_01
     args.add_argument('--model-name', type=str, default='',required=True, help='name of model')
-    args.add_argument('--task-type', type=str, default="reg", choices=['emotic', 'img2vad', 'reg', 'classif'], required=True, help='regression for valence(float), multiple classification for valence type')
+    args.add_argument('--task-type', type=str, default="reg", choices=['brain', 'emotic', 'img2vad', 'reg', 'classif'], required=True, help='regression for valence(float), multiple classification for valence type')
     args.add_argument('--data', type=str, default="brain3d", choices=['brain3d', 'roi'], required=True, help='data for our task. brain3d: whole brain 3d voxel, roi: well-picked brain 1d array. CAUTION: roi is only with particular subjects.')
     args.add_argument('--all-subjects', action='store_true', default=False, help='train or predict for all subjects')
     args.add_argument('--subj', type=int, default=1, choices=[1,2,5,7], help='train or predict for particular subject number')
@@ -39,7 +41,6 @@ def get_args():
     args.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
     args.add_argument("--weight-decay", type=float, default=1e-4, help="Weight decay")
     args.add_argument("--momentum", type=float, default=0.9, help="Momentum")
-    args.add_argument("--model", type=str, default="resnet18", choices=["resnet18", "resnet50", 'mlp'], help="Model. CAUTION: mlp is only for roi data")
     args.add_argument("--num-workers", type=int, default=4, help="Number of workers")
     args.add_argument("--optimizer", type=str, default="adamw", choices=["sgd", "adam", "adamw"], help="Optimizer")
     args.add_argument("--scheduler", type=str, default="cosine", choices=["step", "cosine"], help="Scheduler")
@@ -65,10 +66,17 @@ def get_args():
     img2vad_args.add_argument('--pretrain', action='store_true', default=True, help='Use pretrained cnn backbone')
     img2vad_args.add_argument('--backbone-freeze', action='store_true', default=False, help='Freeze pretrained backbone')
     
+    # EMOTIC Reproduce
     emotic_args = args.add_argument_group('emotic')
     emotic_args.add_argument("--model-type", type=str, default="BI", choices=["BI", "B", "I"], help="BI: use both body and image") 
     emotic_args.add_argument("--coco-only", action="store_true", help="Use EMOTIC && COCO dataset", default=False)
-    
+
+    # Brain Task
+    # use brain3d or roi as guidance to help predicting image => emotic categories
+    emotic_args = args.add_argument_group('brain')
+    emotic_args.add_argument("--image-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50"], help="Image backbone")
+    emotic_args.add_argument("--brain-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50", "mlp"], help="Brain backbone")
+
     args = args.parse_args()
 
     return args
@@ -76,9 +84,11 @@ def get_args():
 def main(args):
 
     if args.exec_mode == "train":
-
         if args.task_type == "emotic":
             trainer = EmoticTrainer(args=args)
+            trainer.train()
+        elif args.task_type == "brain":
+            trainer = BrainTrainer(args=args)
             trainer.train()
         else:
             trainer = Trainer(args=args)
@@ -87,6 +97,9 @@ def main(args):
 
         if args.task_type == "emotic":
             predictor = EmoticPredictor(args=args)
+            predictor.predict()
+        elif args.task_type == "brain":
+            predictor = BrainPredictor(args=args)
             predictor.predict()
         else:
             predictor = Predictor(args=args)

@@ -250,7 +250,6 @@ class EmoticDataset(Dataset):
                  data_path,
                  split,
                  emotic_annotations: pd.DataFrame,
-                 model_type="B",
                  context_transform=None,
                  body_transform=None,
                  normalize=False,
@@ -259,7 +258,6 @@ class EmoticDataset(Dataset):
         self.data_path = data_path
         self.split = split  # train, val, test
         self.metadata = emotic_annotations
-        self.model_type = model_type # ['B', 'BI']
         self.context_transform = context_transform
         self.body_transform = body_transform
         self.normalize = normalize
@@ -273,13 +271,10 @@ class EmoticDataset(Dataset):
         
         context_image = Image.open(os.path.join(self.data_path, sample['folder'], sample['filename']))
         
-        use_body = 'B' in self.model_type # "B"ody 
-        
         # crop body from image
         # using bbox
-        if use_body:
-            bbox = sample['bbox']
-            body_image = context_image.crop((bbox[0], bbox[1], bbox[2], bbox[3]))
+        bbox = sample['bbox']
+        body_image = context_image.crop((bbox[0], bbox[1], bbox[2], bbox[3]))
 
         # use transform
         if self.context_transform is not None:
@@ -301,7 +296,6 @@ class EmoticDataset(Dataset):
 
         return context_image, body_image, valence, arousal, dominance, cat_label
 
-# Create New Dataset 
 class BrainDataset(Dataset):
     """
     Dataset for brain data guidance while image => emotion category prediction
@@ -310,7 +304,6 @@ class BrainDataset(Dataset):
                  subjects,
                  split,
                  data_type='brain3d',
-                 model_type="B",
                  context_transform=None,
                  body_transform=None,
                  normalize=False,
@@ -321,11 +314,11 @@ class BrainDataset(Dataset):
         self.subjects = subjects
         self.split = split
         self.data_type = data_type
-        self.model_type = model_type # ['B', 'BI']
         self.context_transform = context_transform
         self.body_transform = body_transform
         self.normalize = normalize
 
+        print("Pulling Emotic + COCO + NSD Brain data...")
         emotic_data = utils.get_emotic_df(is_split=False)
         self.metadata = utils.get_emotic_coco_nsd_df(emotic_data=emotic_data, 
                                                      split=split, 
@@ -341,13 +334,8 @@ class BrainDataset(Dataset):
         
         context_image = Image.open(os.path.join(self.coco_data_path, sample['folder'], sample['filename']))
         
-        use_body = 'B' in self.model_type # "B"ody 
-        
-        # crop body from image
-        # using bbox
-        if use_body:
-            bbox = sample['bbox']
-            body_image = context_image.crop((bbox[0], bbox[1], bbox[2], bbox[3]))
+        bbox = sample['bbox']
+        body_image = context_image.crop((bbox[0], bbox[1], bbox[2], bbox[3]))
 
         # use transform
         if self.context_transform is not None:
@@ -389,7 +377,6 @@ class BrainDataset(Dataset):
             data = roi
         else: 
             raise ValueError("data_type should be either 'brain3d' or 'roi'")
-
 
         return context_image, body_image, valence, arousal, dominance, cat_label, data
 

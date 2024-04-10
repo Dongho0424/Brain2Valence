@@ -446,7 +446,7 @@ def get_transforms_emotic():
 
     return train_context_transform, train_body_transform, test_context_transform, test_body_transform
 
-def get_emotic_df(is_split=True, coco_only=False):
+def get_emotic_df(is_split=True):
     file_name_emotic_annot = '/home/dongho/brain2valence/data/emotic_annotations.mat'
     data = scipy.io.loadmat(file_name_emotic_annot, simplify_cells=True)
     emotic_annotations = data['train'] + data['test'] + data['val']
