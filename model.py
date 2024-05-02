@@ -9,19 +9,21 @@ from torchvision.models import resnet18, ResNet18_Weights, resnet50, ResNet50_We
 
 class Image2VADModel(nn.Module):
     def __init__(self,
-                 backbone: str = "resnet18",
-                 model_type: str = "BI",
+                 image_backbone: str = "resnet18",
+                 image_model_type: str = "BI",
                  pretrained=True,
                  backbone_freeze=False,
                  ):
         super().__init__()
 
-        self.backbone = backbone
-        assert model_type in ["B", "BI", "I"], f"model type {model_type} is not implemented"
-        self.model_type = model_type
-        print("Model backbone:", backbone)
-        print("Model type:", model_type)
-
+        self.backbone = image_backbone
+        assert image_model_type in ["B", "BI", "I"], f"model type {image_model_type} is not implemented"
+        self.model_type = image_model_type
+        print("#############################")
+        print("### Initialize Image2VADModel ###")
+        print("Image Model backbone:", image_backbone)
+        print("Image Model type:", image_model_type)
+        print("#############################")
 
         if self.backbone == "resnet18":
 
@@ -42,7 +44,7 @@ class Image2VADModel(nn.Module):
             if self.model_type == "B": in_features = self.body_last_feature
             elif self.model_type == "I": in_features = self.context_last_feature
             elif self.model_type == "BI": in_features = self.context_last_feature + self.body_last_feature
-            else: raise NotImplementedError(f"model type {model_type} is not implemented")
+            else: raise NotImplementedError(f"model type {image_model_type} is not implemented")
 
             self.model_fusion = nn.Sequential(
                 nn.Linear(in_features, 256),
@@ -80,7 +82,7 @@ class Image2VADModel(nn.Module):
                 nn.Linear(256, 3)
             )
         else:
-            raise NotImplementedError(f"model {backbone} is not implemented")
+            raise NotImplementedError(f"model {image_backbone} is not implemented")
         
     def forward(self, x_body: torch.Tensor = None, x_context: torch.Tensor = None):
         """
@@ -274,12 +276,16 @@ class BrainModel(nn.Module):
             x_body = self.model_body(x_body)
             x_body = x_body.view(-1, self.body_last_feature)
 
+            if x_brain.dim() == 1:
+                x_brain = x_brain.unsqueeze(0)
             fuse_in = torch.cat((x_body, x_brain), 1)
             fuse_out = self.model_fusion(fuse_in)
         elif self.image_model_type == 'I':
             x_context = self.model_context(x_context)
             x_context = x_context.view(-1, self.context_last_feature)
 
+            if x_brain.dim() == 1:
+                x_brain = x_brain.unsqueeze(0)
             fuse_in = torch.cat((x_context, x_brain), 1)
             fuse_out = self.model_fusion(fuse_in)
         elif self.image_model_type == 'BI':
@@ -289,6 +295,8 @@ class BrainModel(nn.Module):
             x_context = self.model_context(x_context)
             x_context = x_context.view(-1, self.context_last_feature)
 
+            if x_brain.dim() == 1:
+                x_brain = x_brain.unsqueeze(0)
             fuse_in = torch.cat([x_body, x_context, x_brain], 1)
             fuse_out = self.model_fusion(fuse_in)
             

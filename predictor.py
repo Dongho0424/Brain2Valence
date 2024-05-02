@@ -112,7 +112,7 @@ class Predictor:
     def load_model(self, args, use_best=True) -> nn.Module :
         if self.args.task_type == 'img2vad':
             model = Image2VADModel(
-                backbone=self.args.model,
+                image_backbone=self.args.model,
                 num_classif=self.args.num_classif,
                 pretrained=self.args.pretrain
             )

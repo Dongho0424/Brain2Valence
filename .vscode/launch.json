@@ -2,149 +2,35 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "reg_brain3d: train",
+            "name": "brain3d: predict",
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/main.py",
             "args": [
                 "--exec_mode", "train",
                 "--all-subjects",
-                "--wandb-name",
-                "0215_resnet18_mae_1",
-                "--model-name",
-                "all_subjects_resnet18_mae_1",
-                "--wandb-project",
-                "Brain2Valence",
-                "--wandb-entity",
-                "donghochoi",
-                "--model",
-                "resnet18",
-                "--task-type",
-                "reg",
-                "--data",
-                "brain3d",
-                "--epochs",
-                "100",
-                "--batch-size",
-                "32",
-                "--lr",
-                "1e-5",
-                "--weight-decay",
-                "0.001",
-                "--seed",
-                "42",
-                "--criterion",
-                "mae"
-            ],
-            "console": "integratedTerminal",
-            "env": {
-                "CUDA_VISIBLE_DEVICES": "3"
-            }
-        },
-        {
-            "name": "reg_brain3d: predict",
-            "type": "python",
-            "request": "launch",
-            "program": "${workspaceFolder}/main.py",
-            "console": "integratedTerminal",
-            "args": [
-                "--exec_mode", "predict",
-                "--all-subjects",
-                "--wandb-name", "0215_resnet18_mae_1",
-                "--model-name", "all_subjects_resnet18_mae_1",
-                "--wandb-project", "Brain2Valence",
-                "--wandb-entity", "donghochoi",
-                "--model", "resnet18",
-                "--task-type", "reg",
-                "--data", "brain3d",
-                "--best"
-            ],
-            "env": {
-                "CUDA_VISIBLE_DEVICES": "3"
-            }
-        },
-        {
-            "name": "classfi10, roi: train",
-            "type": "python",
-            "request": "launch",
-            "program": "${workspaceFolder}/main.py",
-            "console": "integratedTerminal",
-            "args": [
-                "--exec_mode", "train",
-                "--subj", "1",
                 "--wandb-log",
-                "--wandb-name", "0223_subject1_classif10_mlp",
-                "--model-name", "0223_subject1_classif10_mlp",
-                "--wandb-project", "Brain2Valence",
-                "--wandb-entity", "donghochoi",
-                "--model", "mlp",
-                "--task-type", "classif",
-                "--num-classif", "10",
-                "--data", "roi",
-                "--epochs", "70",
-                "--batch-size", "32",
-                "--lr", "1e-4",
-                "--weight-decay", "0.001",
-                "--seed", "42",
-                "--criterion", "ce"
-            ],
-            "env": {
-                "CUDA_VISIBLE_DEVICES": "3"
-            }
-        },
-        {
-            "name": "img2vad_1",
-            "type": "python",
-            "request": "launch",
-            "program": "${workspaceFolder}/main.py",
-            "console": "integratedTerminal",
-            "args": [
-                "--exec_mode", "predict",
-                "--all-subjects",
-                "--wandb-log",
-                "--wandb-name", "0313_img2vad_3_res18",
-                "--model-name", "0313_img2vad_3_res18",
-                "--wandb-project", "Brain2Valence",
-                "--wandb-entity", "donghochoi",
-                "--model", "resnet18",
-                "--data", "brain3d",
-                "--task-type", "img2vad",
-                "--best"
-            ],
-            "env": {
-                "CUDA_VISIBLE_DEVICES": "0"
-            }
-        },
-        {
-            "name": "emotic",
-            "type": "python",
-            "request": "launch",
-            "program": "${workspaceFolder}/main.py",
-            "console": "integratedTerminal",
-            "args": [
-                "--exec_mode", "train",
-                "--all-subjects",
-                "--wandb-log",
-                "--wandb-name", "0321adam_lr_1e-4",
-                "--model-name", "0321adam_lr_1e-4",
+                "--wandb-name", "0410_imgres18_3dres50_1e-4_BI",
+                "--model-name", "0410_imgres18_3dres50_1e-4_BI",
                 "--wandb-project", "Emotic",
                 "--wandb-entity", "donghochoi",
-                "--model", "resnet18",
-                "--data", "brain3d",
                 "--epochs", "50",
-                "--batch-size", "26",
+                "--batch-size", "32",
                 "--lr", "1e-4",
-                "--weight-decay", "5e-4",
-                "--optimizer", "adam",
-                "--scheduler", "step",
-                "--criterion", "emotic_L2",
-                "--task-type", "emotic",
+                "--weight-decay", "0.01",
+                "--optimizer", "adamw",
+                "--scheduler", "cosine",
+                "--criterion", "emotic_SL1",
+                "--task-type", "brain",
                 "--pretrain",
-                "--backbone-freeze"
+                "--backbone-freeze",
+                "--image-backbone", "resnet18",
+                "--model-type", "BI",
+                "--brain-backbone", "resnet50",
+                "--data", "brain3d",
+                "--best"
             ],
-            "env": {
-                "CUDA_VISIBLE_DEVICES": "0"
-            }
+            "console": "integratedTerminal",
         }
     ]
 }

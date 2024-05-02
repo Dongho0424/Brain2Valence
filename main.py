@@ -70,6 +70,7 @@ def get_args():
     emotic_args = args.add_argument_group('emotic')
     emotic_args.add_argument("--model-type", type=str, default="BI", choices=["BI", "B", "I"], help="BI: use both body and image") 
     emotic_args.add_argument("--coco-only", action="store_true", help="Use EMOTIC && COCO dataset", default=False)
+    emotic_args.add_argument("--with-nsd", action="store_true", help="Use NSD dataset given subjects", default=False)
 
     # Brain Task
     # use brain3d or roi as guidance to help predicting image => emotic categories

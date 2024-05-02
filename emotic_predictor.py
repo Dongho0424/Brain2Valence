@@ -31,8 +31,7 @@ class EmoticPredictor:
             "brain_backbone": self.args.brain_backbone,
             "batch_size": self.args.batch_size,
             "epochs": self.args.epochs,
-            "num_train": self.num_train,
-            "num_val": self.num_val,
+            "num_test": self.num_test,
             "seed": self.args.seed,
             "weight_decay": self.args.weight_decay,
         }
@@ -61,10 +60,17 @@ class EmoticPredictor:
         if self.args.coco_only:
             test_data = test_data[test_data['folder'] == 'mscoco/images']
 
+        if self.args.with_nsd:
+            self.subjects = [1, 2, 5, 7] if self.args.all_subjects else [self.args.subj]
+            print(f"Do EMOTIC task sing NSD data given subject: {self.subjects}")
+            emotic_data = utils.get_emotic_df(is_split=False)
+            test_data = utils.get_emotic_coco_nsd_df(emotic_data=emotic_data, 
+                                                      split='test', 
+                                                      subjects=self.subjects)
+
         test_dataset = EmoticDataset(data_path=data_path,
                                     split='test',
                                     emotic_annotations=test_data,
-                                    model_type="B",
                                     context_transform=test_context_transform,
                                     body_transform=test_body_transform,
                                     normalize=True,
@@ -78,8 +84,8 @@ class EmoticPredictor:
     
     def load_model(self, args, use_best=True) -> nn.Module :
         model = Image2VADModel(
-            backbone=self.args.model,
-            model_type=self.args.model_type,
+            image_backbone=self.args.image_backbone,
+            image_model_type=self.args.model_type,
             pretrained=self.args.pretrain,
             backbone_freeze=self.args.backbone_freeze,
         )

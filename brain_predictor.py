@@ -53,16 +53,13 @@ class BrainPredictor():
 
         _, _, test_context_transform, test_body_transform = utils.get_transforms_emotic()
 
-        if self.args.coco_only:
-            test_data = test_data[test_data['folder'] == 'mscoco/images']
-
         test_dataset = BrainDataset(subjects=self.subjects,
-                                     split='test',
-                                     data_type=self.args.data,
-                                     context_transform=test_context_transform,
-                                     body_transform=test_body_transform,
-                                     normalize=True,
-                                     )
+                                    split='test',
+                                    data_type=self.args.data,
+                                    context_transform=test_context_transform,
+                                    body_transform=test_body_transform,
+                                    normalize=True,
+                                    )
 
         # always batch size is 1
         test_dl = DataLoader(test_dataset, batch_size=1, shuffle=False)

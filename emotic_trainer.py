@@ -73,6 +73,17 @@ class EmoticTrainer:
             train_data = train_data[train_data['folder'] == 'mscoco/images']
             val_data = val_data[val_data['folder'] == 'mscoco/images']
 
+        if self.args.with_nsd:
+            self.subjects = [1, 2, 5, 7] if self.args.all_subjects else [self.args.subj]
+            print(f"Do EMOTIC task sing NSD data given subject: {self.subjects}")
+            emotic_data = utils.get_emotic_df(is_split=False)
+            train_data = utils.get_emotic_coco_nsd_df(emotic_data=emotic_data, 
+                                                      split='train', 
+                                                      subjects=self.subjects)
+            val_data = utils.get_emotic_coco_nsd_df(emotic_data=emotic_data, 
+                                                      split='val', 
+                                                      subjects=self.subjects)
+
         train_dataset = EmoticDataset(data_path=data_path,
                                       split='train',
                                       emotic_annotations=train_data,
@@ -98,8 +109,8 @@ class EmoticTrainer:
 
     def get_model(self):
         model = Image2VADModel(
-            backbone=self.args.model,
-            model_type=self.args.model_type,
+            image_backbone=self.args.image_backbone,
+            image_model_type=self.args.model_type,
             pretrained=self.args.pretrain,
             backbone_freeze=self.args.backbone_freeze,
         )
