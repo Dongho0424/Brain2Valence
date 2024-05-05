@@ -76,7 +76,7 @@ def get_args():
     # use brain3d or roi as guidance to help predicting image => emotic categories
     emotic_args = args.add_argument_group('brain')
     emotic_args.add_argument("--image-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50"], help="Image backbone")
-    emotic_args.add_argument("--brain-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50", "mlp"], help="Brain backbone")
+    emotic_args.add_argument("--brain-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50", "mlp", "mlp2"], help="Brain backbone")
 
     args = args.parse_args()
 

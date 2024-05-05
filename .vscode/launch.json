@@ -1,6 +1,8 @@
 {
     "version": "0.2.0",
     "configurations": [
+    
+
         {
             "name": "brain3d: predict",
             "type": "python",
@@ -31,6 +33,36 @@
                 "--best"
             ],
             "console": "integratedTerminal",
+        },
+        {
+            "name": "roi: Train",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--exec_mode", "train",
+                "--subj", "1",
+                "--wandb-log",
+                "--wandb-name", "0502_roi_5e-3_BI_subj1",
+                "--model-name", "0502_roi_5e-3_BI_subj1",
+                "--wandb-project", "Emotic",
+                "--wandb-entity", "donghochoi",
+                "--epochs", "50",
+                "--batch-size", "52",
+                "--lr", "5e-3",
+                "--weight-decay", "0.01",
+                "--optimizer", "adamw",
+                "--scheduler", "cosine",
+                "--criterion", "emotic_SL1",
+                "--task-type", "brain",
+                "--pretrain",
+                "--backbone-freeze",
+                "--image-backbone", "resnet18",
+                "--model-type", "BI",
+                "--brain-backbone", "mlp",
+                "--data", "roi"
+            ]
         }
     ]
 }

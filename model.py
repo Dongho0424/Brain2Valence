@@ -135,7 +135,7 @@ class BrainModel(nn.Module):
         self.image_model_type = image_model_type
 
         ## For Brain
-        assert brain_backbone in ["resnet18", "resnet50", "mlp"], f"backbone {brain_backbone} is not implemented"
+        assert brain_backbone in ["resnet18", "resnet50", "mlp", "mlp2"], f"backbone {brain_backbone} is not implemented"
         self.brain_backbone = brain_backbone
         assert brain_data_type in ["brain3d", "roi"], f"data type {brain_data_type} is not implemented"
         self.brain_data_type = brain_data_type
@@ -195,25 +195,40 @@ class BrainModel(nn.Module):
             assert len(subjects) == 1, "mlp model is only for subject specific model"
 
             features = utils.get_num_voxels(subjects[-1])
-            self.lin1 = nn.Sequential(
-                nn.Linear(features, 4096),
-                nn.BatchNorm1d(4096), 
+            h = 4096
+            self.lin0 = nn.Sequential(
+                nn.Linear(features, h, bias=False),
+                nn.BatchNorm1d(h), 
                 nn.GELU(),
                 nn.Dropout(0.5),
             )
-            self.mlp = nn.ModuleList([
+            self.mlp = nn.ModuleList([ 
                 nn.Sequential(
-                    nn.Linear(4096, 4096),
-                    nn.BatchNorm1d(4096), 
-                    nn.GELU(),
+                    nn.Linear(h, h, bias=False),
+                    nn.LayerNorm(h),
+                    nn.GELU(), 
+                    nn.Dropout(0.15)
+                ) for _ in range (4)])
+            self.proj = nn.Linear(h, brain_out_feature, bias=True)
+        elif self.brain_backbone == "mlp2": # lightweight version of "mlp"
+            assert len(subjects) == 1, "mlp2 model is only for subject specific model"
+
+            features = utils.get_num_voxels(subjects[-1])
+            h = 4096
+            self.lin0 = nn.Linear(features, h, bias=False)
+            self.mlp = nn.ModuleList([ 
+                nn.Sequential(
+                    nn.LayerNorm(h),
+                    nn.Linear(h, h, bias=False),
+                    nn.GELU(), 
                     nn.Dropout(0.15),
-                ) for _ in range(3)
-            ])
-            self.last = nn.Sequential(
-                nn.Linear(4096, 768),
-                nn.BatchNorm1d(768), 
+                    nn.Linear(h, h, bias=False),
+                ) for _ in range (2)])
+            self.proj = nn.Sequential(
+                nn.Linear(h, 1024, bias=True),
+                nn.LayerNorm(1024),
                 nn.GELU(),
-                nn.Linear(768, brain_out_feature),
+                nn.Linear(1024, brain_out_feature, bias=True),
             )
 
         # fusion model 
@@ -226,6 +241,7 @@ class BrainModel(nn.Module):
 
         fuse_in_features += brain_out_feature # 1024 or 1536
 
+        # TODO: 여기가 별로 맘에 들지 않음.
         self.model_fusion = nn.Sequential(
             nn.Linear(fuse_in_features, 256),
             nn.BatchNorm1d(256),
@@ -249,7 +265,7 @@ class BrainModel(nn.Module):
         """
         - x_context: (B, 3, 224, 224), 
         - x_body: (B, 3, 112, 112)
-        - data: brain3d or roi
+        - x_brain: brain3d or roi
         - out: (B, 26), (B, 3)
             - 26 for emotion categories
             - 3 for vad
@@ -263,13 +279,21 @@ class BrainModel(nn.Module):
             x_brain = x_brain.unsqueeze(dim=1)  # (B, 96, 96, 96) -> (B, 1, 96, 96, 96)
             x_brain = self.res_model(x_brain)  # (B, brain_out_feature)
         elif self.brain_backbone == "mlp":
-            x_brain = self.lin1(x_brain)
+            x_brain = self.lin0(x_brain)
             residual = x_brain
             for block in range(len(self.mlp)):
                 x_brain = self.mlp[block](x_brain)
                 x_brain += residual   
                 residual = x_brain
-            x_brain = self.last(x_brain) # (B, brain_out_feature)
+            x_brain = self.proj(x_brain) # (B, brain_out_feature)
+        elif self.brain_backbone == "mlp2":
+            x_brain = self.lin0(x_brain)
+            residual = x_brain
+            for block in range(len(self.mlp)):
+                x_brain = self.mlp[block](x_brain)
+                x_brain += residual   
+                residual = x_brain
+            x_brain = self.proj(x_brain) # (B, brain_out_feature)
 
         # for image
         if self.image_model_type == 'B':

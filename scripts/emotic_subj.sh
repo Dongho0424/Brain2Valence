@@ -1,7 +1,7 @@
 device=0
 model_type=BI
-subj=1
-for lr in 1e-3 5e-4 1e-4 5e-5 1e-5 
+subj=2
+for lr in 5e-4 1e-4 #1e-3
 do
 
 CUDA_VISIBLE_DEVICES=${device} python3 main.py --exec_mode train --subj ${subj} \

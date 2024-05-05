@@ -58,6 +58,7 @@ class BrainTrainer(EmoticTrainer):
             brain_data_type=self.args.data,
             subjects=self.subjects,
             backbone_freeze=True,
+            pretrained=self.args.pretrain,
         )
 
         utils.print_model_info(model)
