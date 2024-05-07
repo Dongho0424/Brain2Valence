@@ -136,6 +136,16 @@ class EmoticTrainer:
         elif self.args.scheduler == "cosine":
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
                 self.optimizer, T_max=self.args.epochs)
+        elif self.args.scheduler == "cycle":
+            total_steps=int(self.args.epochs * self.num_train)
+            scheduler = torch.optim.lr_scheduler.OneCycleLR(
+                self.optimizer, 
+                max_lr=self.args.lr,
+                total_steps=total_steps,
+                final_div_factor=1000,
+                last_epoch=-1,
+                pct_start=2/self.args.epochs
+            )
         return scheduler
 
     def get_criterion(self):
