@@ -59,6 +59,7 @@ class BrainTrainer(EmoticTrainer):
             subjects=self.subjects,
             backbone_freeze=True,
             pretrained=self.args.pretrain,
+            cat_only=self.args.cat_only
         )
 
         utils.print_model_info(model)
@@ -86,19 +87,32 @@ class BrainTrainer(EmoticTrainer):
                 gt_cat = category.float().cuda()
                 gt_vad = torch.stack([valence, arousal, dominance], dim=1).float().cuda()
                 brain_data = brain_data.float().cuda()
+                
+                if self.args.cat_only: # only category
+                    # brain_data: brain3d or roi
+                    pred_cat= self.model(body_image, context_image, brain_data)
 
-                # brain_data: brain3d or roi
-                pred_cat, pred_vad = self.model(body_image, context_image, brain_data)
+                    loss = self.disc_loss(pred_cat, gt_cat)
 
-                loss_cat = self.disc_loss(pred_cat, gt_cat)
-                loss_vad = self.vad_loss(pred_vad, gt_vad)
-                loss = cat_loss_param * loss_cat + vad_loss_param * loss_vad
+                    self.optimizer.zero_grad()
+                    loss.backward()
+                    self.optimizer.step()
 
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
+                    train_loss += loss.item()    
+                else: # both category and vad 
 
-                train_loss += loss.item()
+                    # brain_data: brain3d or roi
+                    pred_cat, pred_vad = self.model(body_image, context_image, brain_data)
+
+                    loss_cat = self.disc_loss(pred_cat, gt_cat)
+                    loss_vad = self.vad_loss(pred_vad, gt_vad)
+                    loss = cat_loss_param * loss_cat + vad_loss_param * loss_vad
+
+                    self.optimizer.zero_grad()
+                    loss.backward()
+                    self.optimizer.step()
+
+                    train_loss += loss.item()
 
             train_loss /= self.num_train
 
@@ -117,12 +131,20 @@ class BrainTrainer(EmoticTrainer):
                     gt_vad = torch.stack([valence, arousal, dominance], dim=1).float().cuda()
                     brain_data = brain_data.float().cuda()
 
-                    pred_cat, pred_vad = self.model(body_image, context_image, brain_data)
-                    loss_cat = self.disc_loss(pred_cat, gt_cat)
-                    loss_vad = self.vad_loss(pred_vad, gt_vad)
+                    if self.args.cat_only: # only category
+                        # brain_data: brain3d or roi
+                        pred_cat= self.model(body_image, context_image, brain_data)
 
-                    loss = cat_loss_param * loss_cat + vad_loss_param * loss_vad
-                    val_loss += loss.item()
+                        loss = self.disc_loss(pred_cat, gt_cat)
+
+                        val_loss += loss.item()    
+                    else: # both category and vad
+                        pred_cat, pred_vad = self.model(body_image, context_image, brain_data)
+                        loss_cat = self.disc_loss(pred_cat, gt_cat)
+                        loss_vad = self.vad_loss(pred_vad, gt_vad)
+
+                        loss = cat_loss_param * loss_cat + vad_loss_param * loss_vad
+                        val_loss += loss.item()
                 
                 val_loss /= self.num_val
                 wandb.log({"val_loss": val_loss}, step=epoch)

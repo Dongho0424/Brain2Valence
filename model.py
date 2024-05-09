@@ -13,16 +13,19 @@ class Image2VADModel(nn.Module):
                  image_model_type: str = "BI",
                  pretrained=True,
                  backbone_freeze=False,
+                 cat_only=False,
                  ):
         super().__init__()
 
         self.backbone = image_backbone
         assert image_model_type in ["B", "BI", "I"], f"model type {image_model_type} is not implemented"
         self.model_type = image_model_type
+        self.cat_only = cat_only
         print("#############################")
         print("### Initialize Image2VADModel ###")
         print("Image Model backbone:", image_backbone)
         print("Image Model type:", image_model_type)
+        print("Category Prediction Only:", cat_only)
         print("#############################")
 
         if self.backbone == "resnet18":
@@ -52,8 +55,12 @@ class Image2VADModel(nn.Module):
                 nn.ReLU(),
                 nn.Dropout(p=0.5)
             )
-            self.fc_cat = nn.Linear(256, 26)
-            self.fc_cont = nn.Linear(256, 3)
+            
+            if self.cat_only:
+                self.fc_cat = nn.Linear(256, 26)
+            else:
+                self.fc_cat = nn.Linear(256, 26)
+                self.fc_vad = nn.Linear(256, 3)
             
             # freeze parameters
             if backbone_freeze:
@@ -111,9 +118,13 @@ class Image2VADModel(nn.Module):
             fuse_in = torch.cat((x_body, x_context), 1)
             fuse_out = self.model_fusion(fuse_in)
             
-        cat_out = F.sigmoid(self.fc_cat(fuse_out))
-        vad_out = self.fc_cont(fuse_out)
-        return cat_out, vad_out
+        if self.cat_only:
+            cat_out = F.sigmoid(self.fc_cat(fuse_out))
+            return cat_out
+        else:
+            cat_out = F.sigmoid(self.fc_cat(fuse_out))
+            vad_out = self.fc_vad(fuse_out)
+            return cat_out, vad_out
 
 class BrainModel(nn.Module):
     def __init__(self,
@@ -125,6 +136,7 @@ class BrainModel(nn.Module):
                  pretrained=True,
                  backbone_freeze=False,
                  subjects = [1, 2, 5, 7], # for subject specific mlp model
+                 cat_only = False,
                  ):
         super().__init__()
 
@@ -140,6 +152,8 @@ class BrainModel(nn.Module):
         assert brain_data_type in ["brain3d", "roi"], f"data type {brain_data_type} is not implemented"
         self.brain_data_type = brain_data_type
 
+        self.cat_only = cat_only
+
         print("#############################")
         print("### Initialize BrainModel ###")
         print("Image Model backbone:", image_backbone)
@@ -147,6 +161,7 @@ class BrainModel(nn.Module):
         print("Brain Model backbone:", brain_backbone)
         print("Brain Data Type:", brain_data_type)
         print("Data type:", brain_data_type)
+        print("Category Prediction Only:", cat_only)
         print("#############################")
 
         ## Image Model
@@ -240,16 +255,36 @@ class BrainModel(nn.Module):
         else: raise NotImplementedError(f"model type {image_model_type} is not implemented")
 
         fuse_in_features += brain_out_feature # 1024 or 1536
+        fuse_out_features = 256
 
         # TODO: 여기가 별로 맘에 들지 않음.
         self.model_fusion = nn.Sequential(
-            nn.Linear(fuse_in_features, 256),
-            nn.BatchNorm1d(256),
+            nn.Linear(fuse_in_features, fuse_out_features),
+            nn.BatchNorm1d(fuse_out_features),
             nn.ReLU(),
             nn.Dropout(p=0.5)
         )
-        self.fc_cat = nn.Linear(256, 26)
-        self.fc_vad = nn.Linear(256, 3)
+
+        if self.cat_only:
+            self.fc_cat = nn.Linear(fuse_out_features, 26)
+        else:
+            self.fc_cat = nn.Linear(fuse_out_features, 26)
+            self.fc_vad = nn.Linear(fuse_out_features, 3)
+
+        # self.model_fusion = nn.Sequential(
+        #     nn.LayerNorm(fuse_in_features),
+        #     nn.GELU(),
+        #     nn.Linear(fuse_in_features, fuse_in_features),
+        #     nn.LayerNorm(fuse_in_features),
+        #     nn.GELU(),
+        #     nn.Linear(fuse_in_features, fuse_in_features),
+        #     nn.LayerNorm(fuse_in_features),
+        #     nn.GELU(),
+        #     nn.Linear(fuse_in_features, fuse_out_features)
+        # )
+        # self.fc_cat = nn.Linear(fuse_out_features, 26)
+        # self.fc_vad = nn.Linear(fuse_out_features, 3)
+
         
         # freeze pretrained parameters
         if backbone_freeze:
@@ -323,10 +358,14 @@ class BrainModel(nn.Module):
                 x_brain = x_brain.unsqueeze(0)
             fuse_in = torch.cat([x_body, x_context, x_brain], 1)
             fuse_out = self.model_fusion(fuse_in)
-            
-        cat_out = F.sigmoid(self.fc_cat(fuse_out))
-        vad_out = self.fc_vad(fuse_out)
-        return cat_out, vad_out
+
+        if self.cat_only:
+            cat_out = F.sigmoid(self.fc_cat(fuse_out))
+            return cat_out
+        else:
+            cat_out = F.sigmoid(self.fc_cat(fuse_out))
+            vad_out = self.fc_vad(fuse_out)
+            return cat_out, vad_out
 
 class Brain2ValenceModel(nn.Module):
     def __init__(self,

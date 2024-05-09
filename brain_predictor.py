@@ -75,6 +75,7 @@ class BrainPredictor():
             brain_data_type=self.args.data,
             subjects=self.subjects,
             backbone_freeze=True,
+            cat_only=self.args.cat_only
         )
         
         model_name = args.model_name # ex) "all_subjects_res18_mae_2"
@@ -111,13 +112,20 @@ class BrainPredictor():
                 gt_cat = category.float().cuda()
                 gt_vad = torch.stack([valence, arousal, dominance], dim=1).float().cuda()
                 brain_data = brain_data.float().cuda()
-                
-                pred_cat, pred_vad = self.model(body_image, context_image, brain_data) # (1, 26), (1, 3)
 
-                pred_cats[i, :] = pred_cat.cpu().numpy()
-                gt_cats[i, :] = gt_cat.cpu().numpy()
-                pred_vads[i, :] = pred_vad.cpu().numpy()
-                gt_vads[i, :] = gt_vad.cpu().numpy()
+                if self.args.cat_only: # only category
+                    pred_cat = self.model(body_image, context_image, brain_data)
+
+                    pred_cats[i, :] = pred_cat.cpu().numpy()
+                    gt_cats[i, :] = gt_cat.cpu().numpy()
+
+                else: # category + VAD
+                    pred_cat, pred_vad = self.model(body_image, context_image, brain_data) # (1, 26), (1, 3)
+
+                    pred_cats[i, :] = pred_cat.cpu().numpy()
+                    gt_cats[i, :] = gt_cat.cpu().numpy()
+                    pred_vads[i, :] = pred_vad.cpu().numpy()
+                    gt_vads[i, :] = gt_vad.cpu().numpy()
 
         # evaluation for categorical emotion
         ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(26)]
@@ -139,29 +147,31 @@ class BrainPredictor():
         wandb.log({f"Average Prevision per category": wandb.Image(plt)})
         plt.clf()
 
-        # evalutation for VAD
-        vad_mae = [np.mean(np.abs(pred_vads[:, i] - gt_vads[:, i])) for i in range(3)]
-        v_mae = vad_mae[0]
-        a_mae = vad_mae[1]
-        d_mae = vad_mae[2]
-        total_mae = np.mean(vad_mae)
+        if not self.args.cat_only: # when predict vad only
+            # evalutation for VAD
+            vad_mae = [np.mean(np.abs(pred_vads[:, i] - gt_vads[:, i])) for i in range(3)]
+            v_mae = vad_mae[0]
+            a_mae = vad_mae[1]
+            d_mae = vad_mae[2]
+            total_mae = np.mean(vad_mae)
 
-        v_corr = r2_score(gt_vads[:, 0], pred_vads[:, 0])
-        a_corr = r2_score(gt_vads[:, 1], pred_vads[:, 1])
-        d_corr = r2_score(gt_vads[:, 2], pred_vads[:, 2])
+            v_corr = r2_score(gt_vads[:, 0], pred_vads[:, 0])
+            a_corr = r2_score(gt_vads[:, 1], pred_vads[:, 1])
+            d_corr = r2_score(gt_vads[:, 2], pred_vads[:, 2])
 
-        print("valence mae: {:.4f}, arousal mae: {:.4f}, dominance mae: {:.4f}, total mae: {:.4f}".format(v_mae, a_mae, d_mae, total_mae))
-        print("valence corr: {:.4f}, arousal corr: {:.4f}, dominance corr: {:.4f} ".format(v_corr, a_corr, d_corr))
+            print("valence mae: {:.4f}, arousal mae: {:.4f}, dominance mae: {:.4f}, total mae: {:.4f}".format(v_mae, a_mae, d_mae, total_mae))
+            print("valence corr: {:.4f}, arousal corr: {:.4f}, dominance corr: {:.4f} ".format(v_corr, a_corr, d_corr))
+            
+            wandb.log({"valence_mae": v_mae, "arousal_mae": a_mae, "dominance_mae": d_mae, "total_mae": total_mae})
+            wandb.log({"valence_corr": v_corr, "arousal_corr": a_corr, "dominance_corr": d_corr})
+
+            for index, vad in enumerate(['valence', 'arousal', 'dominance']):
+                # Plot true vs pred valence 
+                plt.scatter(gt_vads[:, index], pred_vads[:, index], alpha=0.2)
+                plt.xlabel(f"True {vad}")
+                plt.ylabel(f"Pred {vad}")
+                plt.plot([0, 1], [0, 1], color='red', linestyle='--')
+                        
+                wandb.log({f"plot true {vad} vs pred {vad}": wandb.Image(plt)})
+                plt.clf()
         
-        wandb.log({"valence_mae": v_mae, "arousal_mae": a_mae, "dominance_mae": d_mae, "total_mae": total_mae})
-        wandb.log({"valence_corr": v_corr, "arousal_corr": a_corr, "dominance_corr": d_corr})
-
-        for index, vad in enumerate(['valence', 'arousal', 'dominance']):
-            # Plot true vs pred valence 
-            plt.scatter(gt_vads[:, index], pred_vads[:, index], alpha=0.2)
-            plt.xlabel(f"True {vad}")
-            plt.ylabel(f"Pred {vad}")
-            plt.plot([0, 1], [0, 1], color='red', linestyle='--')
-                    
-            wandb.log({f"plot true {vad} vs pred {vad}": wandb.Image(plt)})
-            plt.clf()

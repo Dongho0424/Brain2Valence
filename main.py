@@ -77,6 +77,9 @@ def get_args():
     emotic_args = args.add_argument_group('brain')
     emotic_args.add_argument("--image-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50"], help="Image backbone")
     emotic_args.add_argument("--brain-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50", "mlp", "mlp2"], help="Brain backbone")
+    # only predict category. Update model, criterion, training, validation, predict 
+    emotic_args.add_argument("--cat-only",  action="store_true", help="predict cat only", default=False)
+
 
     args = args.parse_args()
 

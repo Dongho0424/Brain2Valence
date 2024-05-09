@@ -113,6 +113,7 @@ class EmoticTrainer:
             image_model_type=self.args.model_type,
             pretrained=self.args.pretrain,
             backbone_freeze=self.args.backbone_freeze,
+            cat_only=self.args.cat_only
         )
 
         utils.print_model_info(model)
@@ -137,11 +138,12 @@ class EmoticTrainer:
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
                 self.optimizer, T_max=self.args.epochs)
         elif self.args.scheduler == "cycle":
-            total_steps=int(self.args.epochs * self.num_train)
+            total_steps=int(self.args.epochs * (self.num_train // self.args.batch_size))
             scheduler = torch.optim.lr_scheduler.OneCycleLR(
                 self.optimizer, 
                 max_lr=self.args.lr,
                 total_steps=total_steps,
+                steps_per_epoch=self.num_train // self.args.batch_size,
                 final_div_factor=1000,
                 last_epoch=-1,
                 pct_start=2/self.args.epochs
@@ -180,17 +182,29 @@ class EmoticTrainer:
                 gt_cat = category.float().cuda()
                 gt_vad = torch.stack([valence, arousal, dominance], dim=1).float().cuda()
 
-                pred_cat, pred_vad = self.model(body_image, context_image)
+                if self.args.cat_only:
 
-                loss_cat = self.disc_loss(pred_cat, gt_cat)
-                loss_vad = self.vad_loss(pred_vad, gt_vad)
-                loss = cat_loss_param * loss_cat + vad_loss_param * loss_vad
+                    pred_cat = self.model(body_image, context_image)
 
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
+                    loss = self.disc_loss(pred_cat, gt_cat)
 
-                train_loss += loss.item()
+                    self.optimizer.zero_grad()
+                    loss.backward()
+                    self.optimizer.step()
+
+                    train_loss += loss.item()
+                else:
+                    pred_cat, pred_vad = self.model(body_image, context_image)
+
+                    loss_cat = self.disc_loss(pred_cat, gt_cat)
+                    loss_vad = self.vad_loss(pred_vad, gt_vad)
+                    loss = cat_loss_param * loss_cat + vad_loss_param * loss_vad
+
+                    self.optimizer.zero_grad()
+                    loss.backward()
+                    self.optimizer.step()
+
+                    train_loss += loss.item()
 
             train_loss /= self.num_train
 
@@ -207,13 +221,18 @@ class EmoticTrainer:
                     body_image = body_image.float().cuda()
                     gt_cat = category.float().cuda()
                     gt_vad = torch.stack([valence, arousal, dominance], dim=1).float().cuda()
+                    if self.args.cat_only:
+                        pred_cat = self.model(body_image, context_image)
+                        loss = self.disc_loss(pred_cat, gt_cat)
 
-                    pred_cat, pred_vad = self.model(body_image, context_image)
-                    loss_cat = self.disc_loss(pred_cat, gt_cat)
-                    loss_vad = self.vad_loss(pred_vad, gt_vad)
+                        val_loss += loss.item()
+                    else:   
+                        pred_cat, pred_vad = self.model(body_image, context_image)
+                        loss_cat = self.disc_loss(pred_cat, gt_cat)
+                        loss_vad = self.vad_loss(pred_vad, gt_vad)
 
-                    loss = cat_loss_param * loss_cat + vad_loss_param * loss_vad
-                    val_loss += loss.item()
+                        loss = cat_loss_param * loss_cat + vad_loss_param * loss_vad
+                        val_loss += loss.item()
                 
                 val_loss /= self.num_val
                 wandb.log({"val_loss": val_loss}, step=epoch)
