@@ -137,13 +137,14 @@ class BrainModel(nn.Module):
                  backbone_freeze=False,
                  subjects = [1, 2, 5, 7], # for subject specific mlp model
                  cat_only = False,
+                 fusion_ver=1, # 1 or 2
                  ):
         super().__init__()
 
         ## For Image
         assert image_backbone in ["resnet18", "resnet50"], f"backbone {image_backbone} is not implemented"
         self.image_backbone = image_backbone
-        assert image_model_type in ["B", "BI", "I"], f"model type {image_model_type} is not implemented"
+        assert image_model_type in ["B", "BI", "I", "brain_only"], f"model type {image_model_type} is not implemented"
         self.image_model_type = image_model_type
 
         ## For Brain
@@ -225,6 +226,7 @@ class BrainModel(nn.Module):
                     nn.Dropout(0.15)
                 ) for _ in range (4)])
             self.proj = nn.Linear(h, brain_out_feature, bias=True)
+
         elif self.brain_backbone == "mlp2": # lightweight version of "mlp"
             assert len(subjects) == 1, "mlp2 model is only for subject specific model"
 
@@ -252,39 +254,40 @@ class BrainModel(nn.Module):
         if self.image_model_type == "B": fuse_in_features = self.body_last_feature
         elif self.image_model_type == "I": fuse_in_features = self.context_last_feature
         elif self.image_model_type == "BI": fuse_in_features = self.context_last_feature + self.body_last_feature
+        elif self.image_model_type == "brain_only": fuse_in_features = 0
         else: raise NotImplementedError(f"model type {image_model_type} is not implemented")
 
-        fuse_in_features += brain_out_feature # 1024 or 1536
+        fuse_in_features += brain_out_feature # 512 or 1024 or 1536
         fuse_out_features = 256
 
         # TODO: 여기가 별로 맘에 들지 않음.
-        self.model_fusion = nn.Sequential(
-            nn.Linear(fuse_in_features, fuse_out_features),
-            nn.BatchNorm1d(fuse_out_features),
-            nn.ReLU(),
-            nn.Dropout(p=0.5)
-        )
+        if fusion_ver == 1:
+            self.model_fusion = nn.Sequential(
+                nn.Linear(fuse_in_features, fuse_out_features),
+                nn.BatchNorm1d(fuse_out_features),
+                nn.ReLU(),
+                nn.Dropout(p=0.5)
+            )
+        elif fusion_ver == 2:
+            self.model_fusion = nn.Sequential(
+                nn.Linear(fuse_in_features, fuse_in_features),
+                nn.BatchNorm1d(fuse_in_features),
+                nn.GELU(),
+                nn.Linear(fuse_in_features, fuse_in_features),
+                nn.BatchNorm1d(fuse_in_features),
+                nn.GELU(),
+                nn.Linear(fuse_in_features, fuse_in_features),
+                nn.BatchNorm1d(fuse_in_features),
+                nn.GELU(),
+                nn.Linear(fuse_in_features, fuse_out_features),
+            )
+        else: raise NotImplementedError(f"fusion version {fusion_ver} is not implemented")
 
         if self.cat_only:
             self.fc_cat = nn.Linear(fuse_out_features, 26)
         else:
             self.fc_cat = nn.Linear(fuse_out_features, 26)
             self.fc_vad = nn.Linear(fuse_out_features, 3)
-
-        # self.model_fusion = nn.Sequential(
-        #     nn.LayerNorm(fuse_in_features),
-        #     nn.GELU(),
-        #     nn.Linear(fuse_in_features, fuse_in_features),
-        #     nn.LayerNorm(fuse_in_features),
-        #     nn.GELU(),
-        #     nn.Linear(fuse_in_features, fuse_in_features),
-        #     nn.LayerNorm(fuse_in_features),
-        #     nn.GELU(),
-        #     nn.Linear(fuse_in_features, fuse_out_features)
-        # )
-        # self.fc_cat = nn.Linear(fuse_out_features, 26)
-        # self.fc_vad = nn.Linear(fuse_out_features, 3)
-
         
         # freeze pretrained parameters
         if backbone_freeze:
@@ -358,6 +361,10 @@ class BrainModel(nn.Module):
                 x_brain = x_brain.unsqueeze(0)
             fuse_in = torch.cat([x_body, x_context, x_brain], 1)
             fuse_out = self.model_fusion(fuse_in)
+        elif self.image_model_type == "brain_only":
+            if x_brain.dim() == 1:
+                x_brain = x_brain.unsqueeze(0)
+            fuse_out = self.model_fusion(x_brain)
 
         if self.cat_only:
             cat_out = F.sigmoid(self.fc_cat(fuse_out))

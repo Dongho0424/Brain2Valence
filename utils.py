@@ -573,9 +573,9 @@ def get_emotic_categories():
                   'Excitement', 'Fatigue', 'Fear', 'Happiness', 'Pain', 'Peace', 'Pleasure', 'Sadness',
                   'Sensitivity', 'Suffering', 'Surprise', 'Sympathy', 'Yearning']
 
-    cat2ind = {}
-    ind2cat = {}
+    cat2idx = {}
+    idx2cat = {}
     for idx, emotion in enumerate(categories):
-        cat2ind[emotion] = idx  
-        ind2cat[idx] = emotion
-    return cat2ind, ind2cat
+        cat2idx[emotion] = idx  
+        idx2cat[idx] = emotion
+    return cat2idx, idx2cat

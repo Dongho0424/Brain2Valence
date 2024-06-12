@@ -143,7 +143,7 @@ class EmoticPredictor:
         wandb.log({"AP_mean": ap_mean})
         _, idx2cat = utils.get_emotic_categories()
         for i, ap in enumerate(ap_scores):
-            print(f"AP for {i}. {idx2cat[i]}: {ap*100:.2f}%")
+            print(f"AP for {i}. {idx2cat[i]}: {ap:.4f}")
 
         # plot AP per category
         plt.figure(figsize=(10, 8))
@@ -152,7 +152,7 @@ class EmoticPredictor:
         plt.xticks(range(26), [f"{i}. {idx2cat[i]}" for i in range(26)], rotation=-90)
         for i, ap in enumerate(ap_scores):
             plt.bar(i, ap)
-            plt.text(i, ap, f'{ap * 100:.2f}%', ha='center', va='bottom')
+            plt.text(i, ap, f'{ap:.4f}', ha='center', va='bottom')
         wandb.log({f"Average Prevision per category": wandb.Image(plt)})
         plt.clf()
         

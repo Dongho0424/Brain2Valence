@@ -68,7 +68,7 @@ def get_args():
     
     # EMOTIC Reproduce
     emotic_args = args.add_argument_group('emotic')
-    emotic_args.add_argument("--model-type", type=str, default="BI", choices=["BI", "B", "I"], help="BI: use both body and image") 
+    emotic_args.add_argument("--model-type", type=str, default="BI", choices=["BI", "B", "I", "brain_only"], help="BI: use both body and image") 
     emotic_args.add_argument("--coco-only", action="store_true", help="Use EMOTIC && COCO dataset", default=False)
     emotic_args.add_argument("--with-nsd", action="store_true", help="Use NSD dataset given subjects", default=False)
 
@@ -79,6 +79,7 @@ def get_args():
     emotic_args.add_argument("--brain-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50", "mlp", "mlp2"], help="Brain backbone")
     # only predict category. Update model, criterion, training, validation, predict 
     emotic_args.add_argument("--cat-only",  action="store_true", help="predict cat only", default=False)
+    emotic_args.add_argument("--fusion-ver", type=int, default=1, choices=[1, 2], help="1: EMOTIC, 2: bn")
 
 
     args = args.parse_args()
