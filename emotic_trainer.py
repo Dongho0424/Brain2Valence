@@ -37,6 +37,7 @@ class EmoticTrainer:
         wandb.login(host='https://api.wandb.ai')
         wandb_config = {
             "model_name": self.args.model_name,
+            "subject": "1, 2, 5, 7" if self.args.all_subjects else str(self.args.subj),
             "image_backbone": self.args.image_backbone,
             "brain_backbone": self.args.brain_backbone,
             "batch_size": self.args.batch_size,
@@ -49,11 +50,13 @@ class EmoticTrainer:
         print("wandb_config:\n", wandb_config)
 
         wandb.init(
-            id=self.args.wandb_name,
+            id=self.args.model_name+self.args.notes,
             project=wandb_project,
-            name=self.args.wandb_name,
+            name=self.args.model_name,
+            group=self.args.group,
             config=wandb_config,
             resume="allow",
+            notes=self.args.notes
         )
 
     def prepare_dataloader(self):
@@ -254,15 +257,13 @@ class EmoticTrainer:
 
     def save_model(self, args, model, best):
         model_name = args.model_name  # ex) "all_subjects_res18_mae_2"
-        save_dir = os.path.join(args.save_path, model_name)
+        save_dir = os.path.join(args.save_path, model_name + args.notes)
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
 
         model.cpu()
         if best:
-            torch.save(model.state_dict(), os.path.join(
-                save_dir, "best_model.pth"))
+            torch.save(model.state_dict(), os.path.join(save_dir, "best_model.pth"))
         else:
-            torch.save(model.state_dict(), os.path.join(
-                save_dir, "last_model.pth"))
+            torch.save(model.state_dict(), os.path.join(save_dir, "last_model.pth"))
 

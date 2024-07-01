@@ -539,7 +539,7 @@ def get_emotic_coco_nsd_df(emotic_data, split='train', seed=42, subjects=[1, 2, 
     nsd_df = pd.read_csv(file_name_nsd_stim)
 
     ## bring metadata
-    data_path="/home/juhyeon/fsx/proj-medarc/fmri/natural-scenes-dataset/webdataset_avg_split"
+    data_path="/home/data/fsx/proj-medarc/fmri/natural-scenes-dataset/webdataset_avg_split"
     if split in ['train', 'val']:
         dfs = [pd.read_csv(os.path.join(data_path, f'train_subj0{subj}_metadata.csv')) for subj in subjects]
         dfs += [pd.read_csv(os.path.join(data_path, f'val_subj0{subj}_metadata.csv')) for subj in subjects]
@@ -554,7 +554,7 @@ def get_emotic_coco_nsd_df(emotic_data, split='train', seed=42, subjects=[1, 2, 
     metadata = metadata.rename(columns={'coco': 'nsd_id_filename'})
 
     # get nsd_id from numpy data
-    nsd_id = metadata['nsd_id_filename'].apply(lambda x: np.load(os.path.join(data_path, x.split('_')[0], x))[-1])
+    nsd_id = metadata['nsd_id_filename'].apply(lambda x: np.load(os.path.join(data_path, x))[-1])
 
     # get corresponding image_id from nsd_df
     metadata['image_id'] = nsd_id.apply(lambda x: nsd_df.loc[x, 'cocoId'])

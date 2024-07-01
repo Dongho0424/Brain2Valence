@@ -57,7 +57,7 @@ class Predictor:
     def prepare_dataloader(self): 
         print("Pulling Brain and Valence pair data...")
 
-        data_path="/home/juhyeon/fsx/proj-medarc/fmri/natural-scenes-dataset/webdataset_avg_split"
+        data_path="/home/data/fsx/proj-medarc/fmri/natural-scenes-dataset/webdataset_avg_split"
 
         print('Prepping test dataloaders...')
 

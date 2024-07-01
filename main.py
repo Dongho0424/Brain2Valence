@@ -19,15 +19,17 @@ def get_args():
     args.add_argument('--wandb-log', action='store_true', help='use wandb')
     # wandb_name: wandb의 id로 쓰이면서, 날짜, 모델, lr, 등등 wandb log에서 구분하기 쉽도록 함.
     # ex) 240203_res18_mae_01_predict
-    args.add_argument('--wandb-name', type=str, default='test', help='name as id, particular wandb run')
+    # args.add_argument('--wandb-name', type=str, default='test', help='name as id, particular wandb run')
     args.add_argument('--wandb-project', type=str, default='Brain2Valence', help='name of wandb project')
     args.add_argument('--wandb-entity', type=str, default='donghochoi', help='name of wandb entity')
+    args.add_argument('--group', type=str, required=True, help='group name for wandb run')
+    args.add_argument('--notes', type=str, required=True, help='date_#_tag')
 
     # execute options
     # model_name: model 저장 디렉토리 및 현재 모델의 개괄 설명 간단히
     # kind of all_subjects_res18_mae_01, subject1_res18_mae_01
     args.add_argument('--model-name', type=str, default='',required=True, help='name of model')
-    args.add_argument('--task-type', type=str, default="reg", choices=['brain', 'emotic', 'img2vad', 'reg', 'classif'], required=True, help='regression for valence(float), multiple classification for valence type')
+    args.add_argument('--task-type', type=str, default="reg", choices=['fMRI_emotion', 'brain', 'emotic', 'img2vad', 'reg', 'classif'], required=True, help='regression for valence(float), multiple classification for valence type')
     args.add_argument('--data', type=str, default="brain3d", choices=['brain3d', 'roi'], required=True, help='data for our task. brain3d: whole brain 3d voxel, roi: well-picked brain 1d array. CAUTION: roi is only with particular subjects.')
     args.add_argument('--all-subjects', action='store_true', default=False, help='train or predict for all subjects')
     args.add_argument('--subj', type=int, default=1, choices=[1,2,5,7], help='train or predict for particular subject number')
@@ -92,7 +94,7 @@ def main(args):
         if args.task_type == "emotic":
             trainer = EmoticTrainer(args=args)
             trainer.train()
-        elif args.task_type == "brain":
+        elif args.task_type == "brain" or args.task_type == "fMRI_emotion":
             trainer = BrainTrainer(args=args)
             trainer.train()
         else:
@@ -103,7 +105,7 @@ def main(args):
         if args.task_type == "emotic":
             predictor = EmoticPredictor(args=args)
             predictor.predict()
-        elif args.task_type == "brain":
+        elif args.task_type == "brain" or args.task_type == "fMRI_emotion":
             predictor = BrainPredictor(args=args)
             predictor.predict()
         else:

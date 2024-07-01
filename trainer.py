@@ -47,7 +47,7 @@ class Trainer:
     def prepare_dataloader(self): 
         print("Pulling Brain and Valence pair data...")
 
-        data_path="/home/juhyeon/fsx/proj-medarc/fmri/natural-scenes-dataset/webdataset_avg_split"
+        data_path="/home/data/fsx/proj-medarc/fmri/natural-scenes-dataset/webdataset_avg_split"
 
         print('Prepping train and validation dataloaders...')
 
@@ -261,32 +261,3 @@ class Trainer:
             torch.save(model.state_dict(), os.path.join(save_dir, "best_model.pth"))
         else:
             torch.save(model.state_dict(), os.path.join(save_dir, "last_model.pth"))
-
-# def prepare_dataloader(self): 
-    #     print('Pulling NSD webdataset data...')
-
-    #     data_path = "/home/juhyeon/fsx/proj-medarc/fmri/natural-scenes-dataset"
-    #     train_url = "{" + f"{data_path}/webdataset_avg_split/train/train_subj0{self.args.subj}_" + "{0..17}.tar," + f"{data_path}/webdataset_avg_split/val/val_subj0{self.args.subj}_0.tar" + "}"
-    #     val_url = f"{data_path}/webdataset_avg_split/test/test_subj0{self.args.subj}_" + "{0..1}.tar"
-    #     print(train_url,"\n",val_url)
-    #     data_url = 
-    #     num_data = 73000
-
-    #     print('Prepping train and validation dataloaders...')
-    #     dataloader = utils.get_dataloaders(
-    #         self.args.batch_size,
-    #         'images',
-    #         num_devices=torch.cuda.device_count(),
-    #         data_url=data_url
-    #         num_data=,
-    #         seed=self.args.seed,
-    #         voxels_key='nsdgeneral.npy',
-    #         to_tuple=["voxels", "images", "coco", "data"],
-    #     )
-        
-    #     self.train_dl = train_dl
-    #     self.val_dl = val_dl
-    #     self.num_train = num_train
-    #     self.num_val = num_val
-    #     self.train_url = train_url
-    #     self.val_url = val_url

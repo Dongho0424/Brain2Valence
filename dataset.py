@@ -169,8 +169,8 @@ class BrainValenceDataset(Dataset):
         # rename
         self.metadata = self.metadata.rename(columns={'coco': 'nsd_id'})
 
-        # get nsd_id from numpy data
-        nsd_id = self.metadata['nsd_id'].apply(lambda x: np.load(os.path.join(self.data_path, x.split('_')[0], x))[-1])
+        # get nsd_id from numpy data    
+        nsd_id = self.metadata['nsd_id'].apply(lambda x: np.load(os.path.join(self.data_path, x))[-1])
 
         # get corresponding coco_id from nsd_df
         coco_id = nsd_id.apply(lambda x: self.nsd_df.loc[x, 'cocoId'])
@@ -310,7 +310,7 @@ class BrainDataset(Dataset):
                  ):
 
         self.coco_data_path = "/home/dongho/brain2valence/data/emotic"
-        self.nsd_data_path="/home/juhyeon/fsx/proj-medarc/fmri/natural-scenes-dataset/webdataset_avg_split"
+        self.nsd_data_path="/home/data/fsx/proj-medarc/fmri/natural-scenes-dataset/webdataset_avg_split"
         self.subjects = subjects
         self.split = split
         self.data_type = data_type
@@ -363,7 +363,7 @@ class BrainDataset(Dataset):
         split = sample['brain3d'].split('_')[0]
 
         if self.data_type == 'brain3d':
-            brain_3d = torch.from_numpy(np.load(os.path.join(self.nsd_data_path, split, sample['brain3d'])))  # (3, *, *, *)
+            brain_3d = torch.from_numpy(np.load(os.path.join(self.nsd_data_path, sample['brain3d'])))  # (3, *, *, *)
             brain_3d = brain_3d[repeat_index]
             brain_3d = self.reshape_brain3d(brain_3d)  # (96, 96, 96)
 
@@ -371,7 +371,7 @@ class BrainDataset(Dataset):
         elif self.data_type == 'roi':
             if len(self.subjects) > 1:
                 raise ValueError("Only one subject's roi data is available")
-            roi = torch.from_numpy(np.load(os.path.join(self.nsd_data_path, split, sample['roi'])))  # (3, *)
+            roi = torch.from_numpy(np.load(os.path.join(self.nsd_data_path, sample['roi'])))  # (3, *)
             roi = roi[repeat_index]
 
             data = roi

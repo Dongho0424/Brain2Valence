@@ -27,6 +27,7 @@ class EmoticPredictor:
         wandb.login(host='https://api.wandb.ai')
         wandb_config = {
             "model_name": self.args.model_name,
+            "subject": "1, 2, 5, 7" if self.args.all_subjects else str(self.args.subj),
             "image_backbone": self.args.image_backbone,
             "brain_backbone": self.args.brain_backbone,
             "batch_size": self.args.batch_size,
@@ -38,11 +39,13 @@ class EmoticPredictor:
         print("wandb_config:\n",wandb_config)
 
         wandb.init(
-            id = self.args.wandb_name,
+            id=self.args.model_name+self.args.notes,
             project=wandb_project,
-            name=self.args.wandb_name,
+            name=self.args.model_name,
+            group=self.args.group,
             config=wandb_config,
             resume="allow",
+            notes=self.args.notes
         )
         
     def prepare_dataloader(self): 
@@ -94,10 +97,10 @@ class EmoticPredictor:
         model_name = args.model_name # ex) "all_subjects_res18_mae_2"
 
         if use_best:
-            best_path = os.path.join(self.args.save_path, model_name, "best_model.pth")
+            best_path = os.path.join(self.args.save_path, model_name + args.notes, "best_model.pth")
             model.load_state_dict(torch.load(best_path))
         else:
-            last_path = os.path.join(self.args.save_path, model_name, "last_model.pth")
+            last_path = os.path.join(self.args.save_path, model_name + args.notes, "last_model.pth")
             model.load_state_dict(torch.load(last_path))
         return model
     
