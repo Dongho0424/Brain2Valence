@@ -1,8 +1,6 @@
 {
     "version": "0.2.0",
     "configurations": [
-    
-
         {
             "name": "brain3d: predict",
             "type": "python",
@@ -62,6 +60,39 @@
                 "--model-type", "BI",
                 "--brain-backbone", "mlp",
                 "--data", "roi"
+            ]
+        }, 
+        {
+            "name": "pretrain by EMOTIC",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--exec_mode", "train",
+                "--subj", "1",
+                "--wandb-log",
+                "--model-name", "exp_1",
+                "--notes", "0701_1",
+                "--group", "emotic_pretraining",
+                "--wandb-project", "fMRI_Emotion",
+                "--wandb-entity", "donghochoi",
+                "--epochs", "30",
+                "--batch-size", "52",
+                "--lr", "3e-3",
+                "--weight-decay", "0.01",
+                "--optimizer", "adamw",
+                "--scheduler", "cosine",
+                "--criterion", "emotic_SL1",
+                "--task-type", "brain",
+                "--pretrain", "EMOTIC",
+                "--backbone-freeze",
+                "--image-backbone", "resnet18",
+                "--model-type", "BI",
+                "--brain-backbone", "mlp2",
+                "--data", "roi",
+                "--cat-only",
+                "--fusion-ver", "2"
             ]
         }
     ]

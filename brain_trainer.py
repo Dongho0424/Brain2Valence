@@ -72,6 +72,7 @@ class BrainTrainer(EmoticTrainer):
         print("#### enter Training ####")
 
         best_val_loss = float("inf")
+        best_val_ap_mean = -float("inf")
         # now set equal
         cat_loss_param = 0.5
         vad_loss_param = 0.5
@@ -123,6 +124,8 @@ class BrainTrainer(EmoticTrainer):
 
             self.model.eval()
             val_loss = 0
+            pred_cats = np.zeros((self.args.batch_size, 26))
+            gt_cats = np.zeros((self.args.batch_size, 26))
             with torch.no_grad():
                 for i, (context_image, body_image, valence, arousal, dominance, category, brain_data) in tqdm(enumerate(self.val_dl)):
 
@@ -139,6 +142,10 @@ class BrainTrainer(EmoticTrainer):
                         loss = self.disc_loss(pred_cat, gt_cat)
 
                         val_loss += loss.item()    
+
+                        pred_cats = np.vstack((pred_cats, pred_cat.cpu().numpy())) if not np.all(pred_cats == 0) else pred_cat.cpu().numpy()
+                        gt_cats = np.vstack((gt_cats, gt_cat.cpu().numpy())) if not np.all(gt_cats == 0) else gt_cat.cpu().numpy()
+
                     else: # both category and vad
                         pred_cat, pred_vad = self.model(body_image, context_image, brain_data)
                         loss_cat = self.disc_loss(pred_cat, gt_cat)
@@ -150,11 +157,21 @@ class BrainTrainer(EmoticTrainer):
                 val_loss /= self.num_val
                 wandb.log({"val_loss": val_loss}, step=epoch)
 
+                # evaluation for categorical emotion
+
+                ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(26)]
+                ap_mean = np.mean(ap_scores)
+                wandb.log({"val_AP_mean": ap_mean}, step=epoch)
+
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 print ('saving model at epoch: %d' %(epoch))
                 wandb.log({"best_val_loss": best_val_loss}, step=epoch)
                 self.save_model(self.args, self.model, best=True)
+
+            if ap_mean > best_val_ap_mean:
+                best_val_ap_mean = ap_mean
+                wandb.log({"best_val_AP_mean": ap_mean}, step=epoch)
 
             self.scheduler.step()
 
