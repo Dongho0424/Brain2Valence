@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torchvision.transforms import v2
 import os
 import utils
-from model import Brain2ValenceModel, Image2VADModel
+from model import Brain2ValenceModel, EmoticModel
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import mean_squared_error, r2_score, average_precision_score
@@ -111,7 +111,7 @@ class Predictor:
     
     def load_model(self, args, use_best=True) -> nn.Module :
         if self.args.task_type == 'img2vad':
-            model = Image2VADModel(
+            model = EmoticModel(
                 image_backbone=self.args.model,
                 num_classif=self.args.num_classif,
                 pretrained=self.args.pretrain

@@ -286,7 +286,7 @@ class BrainModel(nn.Module):
             vad_out = self.fc_vad(fuse_out)
             return cat_out, vad_out
 
-class Image2VADModel(nn.Module):
+class EmoticModel(nn.Module):
     def __init__(self,
                  image_backbone: str = "resnet18",
                  image_model_type: str = "BI",

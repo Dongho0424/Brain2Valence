@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import os
 import utils
-from model import Image2VADModel
+from model import EmoticModel
 from tqdm import tqdm
 from dataset import EmoticDataset
 import matplotlib.pyplot as plt
@@ -86,7 +86,7 @@ class EmoticPredictor:
         return test_dl, len(test_dataset)
     
     def load_model(self, args, use_best=True) -> nn.Module :
-        model = Image2VADModel(
+        model = EmoticModel(
             image_backbone=self.args.image_backbone,
             image_model_type=self.args.model_type,
             pretrain=self.args.pretrain,

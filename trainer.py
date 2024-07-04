@@ -4,7 +4,7 @@ import torch.nn as nn
 from torch.cuda.amp import autocast, GradScaler
 import os
 import utils 
-from model import Brain2ValenceModel, Image2VADModel
+from model import Brain2ValenceModel, EmoticModel
 from torchvision.transforms import v2
 from tqdm import tqdm
 
@@ -87,7 +87,7 @@ class Trainer:
     
     def get_model(self):
         if self.args.task_type == 'img2vad':
-            model = Image2VADModel(
+            model = EmoticModel(
                 image_backbone=self.args.model,
                 num_classif=self.args.num_classif,
                 pretrained=self.args.pretrain,

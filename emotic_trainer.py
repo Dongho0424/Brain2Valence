@@ -4,7 +4,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 import os
 import utils
-from model import Image2VADModel
+from model import EmoticModel
 from torchvision.transforms import v2
 from tqdm import tqdm
 import pandas as pd
@@ -113,7 +113,7 @@ class EmoticTrainer:
         return train_dl, val_dl, len(train_dataset), len(val_dataset)
 
     def get_model(self):
-        model = Image2VADModel(
+        model = EmoticModel(
             image_backbone=self.args.image_backbone,
             image_model_type=self.args.model_type,
             pretrain=self.args.pretrain,

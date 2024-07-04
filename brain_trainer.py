@@ -4,7 +4,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 import os
 import utils
-from model import Image2VADModel
+from model import EmoticModel
 from torchvision.transforms import v2
 from tqdm import tqdm
 import pandas as pd
