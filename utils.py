@@ -34,8 +34,7 @@ def print_model_info(model):
     print("Model's net structure:")
     print("Model name:", model.__class__.__name__)
     for name, param in model.named_parameters():
-        print(
-            f"Layer: {name}, Type: {type(param.data).__name__}, Parameters: {param.numel()}")
+        print(f"Layer: {name}, Type: {type(param.data).__name__}, Parameters: {param.numel()}")
         if param.requires_grad:
             total_trainable_params += param.numel()
         else:

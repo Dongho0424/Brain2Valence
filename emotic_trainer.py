@@ -11,6 +11,8 @@ import pandas as pd
 import scipy
 from dataset import EmoticDataset
 from loss import ContinuousLoss_L2, DiscreteLoss, ContinuousLoss_SL1
+import numpy as np
+from sklearn.metrics import mean_squared_error, r2_score, average_precision_score
 
 class EmoticTrainer:
     def __init__(self, args):
@@ -114,7 +116,7 @@ class EmoticTrainer:
         model = Image2VADModel(
             image_backbone=self.args.image_backbone,
             image_model_type=self.args.model_type,
-            pretrained=self.args.pretrain,
+            pretrain=self.args.pretrain,
             backbone_freeze=self.args.backbone_freeze,
             cat_only=self.args.cat_only
         )
@@ -169,6 +171,7 @@ class EmoticTrainer:
         print("#### enter Training ####")
 
         best_val_loss = float("inf")
+        best_val_ap_mean = -float("inf")
         # now set equal
         cat_loss_param = 0.5
         vad_loss_param = 0.5
@@ -217,6 +220,8 @@ class EmoticTrainer:
 
             self.model.eval()
             val_loss = 0
+            pred_cats = np.zeros((self.args.batch_size, 26))
+            gt_cats = np.zeros((self.args.batch_size, 26))
             with torch.no_grad():
                 for i, (context_image, body_image, valence, arousal, dominance, category) in tqdm(enumerate(self.val_dl)):
 
@@ -229,6 +234,8 @@ class EmoticTrainer:
                         loss = self.disc_loss(pred_cat, gt_cat)
 
                         val_loss += loss.item()
+                        pred_cats = np.vstack((pred_cats, pred_cat.cpu().numpy())) if not np.all(pred_cats == 0) else pred_cat.cpu().numpy()
+                        gt_cats = np.vstack((gt_cats, gt_cat.cpu().numpy())) if not np.all(gt_cats == 0) else gt_cat.cpu().numpy()
                     else:   
                         pred_cat, pred_vad = self.model(body_image, context_image)
                         loss_cat = self.disc_loss(pred_cat, gt_cat)
@@ -240,19 +247,27 @@ class EmoticTrainer:
                 val_loss /= self.num_val
                 wandb.log({"val_loss": val_loss}, step=epoch)
 
+                ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(26)]
+                ap_mean = np.mean(ap_scores)
+                wandb.log({"val_AP_mean": ap_mean}, step=epoch)
+
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 print ('saving model at epoch: %d' %(epoch))
                 wandb.log({"best_val_loss": best_val_loss}, step=epoch)
                 self.save_model(self.args, self.model, best=True)
 
+            if ap_mean > best_val_ap_mean:
+                best_val_ap_mean = ap_mean
+                wandb.log({"best_val_AP_mean": ap_mean}, step=epoch)
+                
             self.scheduler.step()
 
             print("Epoch: {}, Train Loss: {:.4f}, Val Loss: {:.4f}".format(
                 epoch, train_loss, val_loss))
 
         self.save_model(self.args, self.model, best=False)
-        wandb.log({"best_val_loss": best_val_loss})
+        # wandb.log({"best_val_loss": best_val_loss})
         return self.model
 
     def save_model(self, args, model, best):

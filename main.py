@@ -65,7 +65,7 @@ def get_args():
 
     # task type: image to VAD
     img2vad_args = args.add_argument_group('img2vad')
-    img2vad_args.add_argument('--pretrain', action='store_true', default=True, help='Use pretrained cnn backbone')
+    img2vad_args.add_argument('--pretrain', type=str, default="None", choices=["None", "default", "EMOTIC"], help='default: pretrained by ImageNet + Places365, EMOTIC: pretrained by EMOTIC dataset')  
     img2vad_args.add_argument('--backbone-freeze', action='store_true', default=False, help='Freeze pretrained backbone')
     
     # EMOTIC Reproduce
@@ -78,7 +78,7 @@ def get_args():
     # use brain3d or roi as guidance to help predicting image => emotic categories
     emotic_args = args.add_argument_group('brain')
     emotic_args.add_argument("--image-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50"], help="Image backbone")
-    emotic_args.add_argument("--brain-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50", "mlp", "mlp2"], help="Brain backbone")
+    emotic_args.add_argument("--brain-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50", "mlp1", "mlp2"], help="Brain backbone")
     # only predict category. Update model, criterion, training, validation, predict 
     emotic_args.add_argument("--cat-only",  action="store_true", help="predict cat only", default=False)
     emotic_args.add_argument("--fusion-ver", type=int, default=1, choices=[1, 2], help="1: EMOTIC, 2: bn")

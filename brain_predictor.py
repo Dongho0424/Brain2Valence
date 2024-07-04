@@ -75,8 +75,9 @@ class BrainPredictor():
             image_model_type=self.args.model_type,
             brain_backbone=self.args.brain_backbone,
             brain_data_type=self.args.data,
+            pretrain=self.args.pretrain,
             subjects=self.subjects,
-            backbone_freeze=True,
+            backbone_freeze=self.args.backbone_freeze,
             cat_only=self.args.cat_only,
             fusion_ver=self.args.fusion_ver
         )

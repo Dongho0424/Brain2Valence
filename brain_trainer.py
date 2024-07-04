@@ -13,7 +13,8 @@ from dataset import BrainDataset
 from loss import ContinuousLoss_L2, DiscreteLoss, ContinuousLoss_SL1
 from emotic_trainer import EmoticTrainer
 from model import BrainModel
-
+import numpy as np
+from sklearn.metrics import mean_squared_error, r2_score, average_precision_score
 
 class BrainTrainer(EmoticTrainer):
     def __init__(self, args):
@@ -57,8 +58,8 @@ class BrainTrainer(EmoticTrainer):
             brain_backbone=self.args.brain_backbone,
             brain_data_type=self.args.data,
             subjects=self.subjects,
-            backbone_freeze=True,
-            pretrained=self.args.pretrain,
+            backbone_freeze=self.args.backbone_freeze,
+            pretrain=self.args.pretrain,
             cat_only=self.args.cat_only,
             fusion_ver=self.args.fusion_ver
         )
@@ -178,5 +179,5 @@ class BrainTrainer(EmoticTrainer):
             print("Epoch: {}, Train Loss: {:.4f}, Val Loss: {:.4f}".format(epoch, train_loss, val_loss))
 
         self.save_model(self.args, self.model, best=False)
-        wandb.log({"best_val_loss": best_val_loss})
+        # wandb.log({"best_val_loss": best_val_loss})
         return self.model

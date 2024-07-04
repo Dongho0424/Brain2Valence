@@ -89,7 +89,7 @@ class EmoticPredictor:
         model = Image2VADModel(
             image_backbone=self.args.image_backbone,
             image_model_type=self.args.model_type,
-            pretrained=self.args.pretrain,
+            pretrain=self.args.pretrain,
             backbone_freeze=self.args.backbone_freeze,
             cat_only=self.args.cat_only
         )
