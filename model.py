@@ -14,7 +14,7 @@ class BrainModel(nn.Module):
                  brain_backbone: str = "resnet18",
                  brain_data_type: str = 'brain3d',
                  brain_out_feature = 512,
-                 pretrain: str = "None",
+                 pretrained: str = "None",
                  backbone_freeze=False,
                  subjects = [1, 2, 5, 7], # for subject specific mlp model
                  cat_only = False,
@@ -27,8 +27,8 @@ class BrainModel(nn.Module):
         self.image_backbone = image_backbone
         assert image_model_type in ["B", "BI", "I", "brain_only"], f"model type {image_model_type} is not implemented"
         self.image_model_type = image_model_type
-        assert pretrain in ["None", "default", "EMOTIC"], f"pretrain {pretrain} is not implemented"
-        self.pretrain = pretrain
+        assert pretrained in ["None", "default", "EMOTIC"], f"pretrain {pretrained} is not implemented"
+        self.pretrain = pretrained
 
         ## For Brain
         assert brain_backbone in ["resnet18", "resnet50", "mlp1", "mlp2"], f"backbone {brain_backbone} is not implemented"
@@ -42,7 +42,7 @@ class BrainModel(nn.Module):
         print("### Initialize BrainModel ###")
         print("Image Model backbone:", image_backbone)
         print("Image Model type:", image_model_type)
-        print("Pretrain Type:", pretrain)
+        print("Pretrain Type:", pretrained)
         print("Brain Model backbone:", brain_backbone)
         print("Brain Data Type:", brain_data_type)
         print("Data type:", brain_data_type)
@@ -290,7 +290,7 @@ class EmoticModel(nn.Module):
     def __init__(self,
                  image_backbone: str = "resnet18",
                  image_model_type: str = "BI",
-                 pretrain="None",
+                 pretrained="None",
                  backbone_freeze=False,
                  cat_only=False,
                  ):
@@ -300,8 +300,8 @@ class EmoticModel(nn.Module):
         assert image_model_type in ["B", "BI", "I"], f"model type {image_model_type} is not implemented"
         self.model_type = image_model_type
         self.cat_only = cat_only
-        assert pretrain in ["None", "default"], f"pretrain {pretrain} is not implemented"
-        self.pretrain = pretrain
+        assert pretrained in ["None", "default"], f"pretrain {pretrained} is not implemented"
+        self.pretrain = pretrained
 
         print("#############################")
         print("### Initialize Image2VADModel ###")

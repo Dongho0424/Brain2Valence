@@ -22,7 +22,7 @@
                 "--scheduler", "cosine",
                 "--criterion", "emotic_SL1",
                 "--task-type", "brain",
-                "--pretrain",
+                "--pretrained",
                 "--backbone-freeze",
                 "--image-backbone", "resnet18",
                 "--model-type", "BI",
@@ -54,7 +54,7 @@
                 "--scheduler", "cosine",
                 "--criterion", "emotic_SL1",
                 "--task-type", "brain",
-                "--pretrain",
+                "--pretrained",
                 "--backbone-freeze",
                 "--image-backbone", "resnet18",
                 "--model-type", "BI",
@@ -63,7 +63,7 @@
             ]
         }, 
         {
-            "name": "pretrain by EMOTIC",
+            "name": "pretraining with EMOTIC",
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/main.py",
@@ -71,7 +71,6 @@
             "args": [
                 "--exec_mode", "train",
                 "--subj", "1",
-                "--wandb-log",
                 "--model-name", "exp_1",
                 "--notes", "0701_1",
                 "--group", "emotic_pretraining",
@@ -84,15 +83,13 @@
                 "--optimizer", "adamw",
                 "--scheduler", "cosine",
                 "--criterion", "emotic_SL1",
-                "--task-type", "brain",
-                "--pretrain", "EMOTIC",
-                "--backbone-freeze",
+                "--task-type", "emotic",
+                "--pretrained", "default",
+                "--pretraining",
                 "--image-backbone", "resnet18",
                 "--model-type", "BI",
-                "--brain-backbone", "mlp2",
                 "--data", "roi",
                 "--cat-only",
-                "--fusion-ver", "2"
             ]
         }
     ]

@@ -23,12 +23,12 @@ do
     CUDA_VISIBLE_DEVICES=${device} python3 main.py --exec_mode train --subj ${subj} \
     --wandb-log --model-name 3dfmri_img_${lr}_fus${fusion_ver} --notes 0703_1_hparam --group hparam_srch_3dfmri --wandb-project fMRI_Emotion --wandb-entity donghochoi \
     --epochs 30 --batch-size 52 --lr ${lr} --weight-decay 0.01 --optimizer adamw --scheduler cosine --criterion emotic_SL1 \
-    --task-type brain --pretrain default --backbone-freeze --image-backbone resnet18 --model-type ${model_type} --brain-backbone resnet18 --data brain3d --cat-only --fusion-ver ${fusion_ver} & wait
+    --task-type brain --pretrained default --backbone-freeze --image-backbone resnet18 --model-type ${model_type} --brain-backbone resnet18 --data brain3d --cat-only --fusion-ver ${fusion_ver} & wait
 
     CUDA_VISIBLE_DEVICES=${device} python3 main.py --exec_mode predict --subj ${subj} \
     --wandb-log --model-name 3dfmri_img_${lr}_fus${fusion_ver} --notes 0703_1_hparam --group hparam_srch_3dfmri --wandb-project fMRI_Emotion --wandb-entity donghochoi \
     --epochs 30 --batch-size 52 --lr ${lr} --weight-decay 0.01 --optimizer adamw --scheduler cosine --criterion emotic_SL1 \
-    --task-type brain --pretrain default --backbone-freeze --image-backbone resnet18 --model-type ${model_type} --brain-backbone resnet18 --data brain3d --cat-only --fusion-ver ${fusion_ver} \
+    --task-type brain --pretrained default --backbone-freeze --image-backbone resnet18 --model-type ${model_type} --brain-backbone resnet18 --data brain3d --cat-only --fusion-ver ${fusion_ver} \
     --best & wait
 
     done

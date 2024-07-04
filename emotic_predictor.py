@@ -16,7 +16,8 @@ class EmoticPredictor:
     def __init__(self, args):
         self.args = args
 
-        self.test_dl, self.num_test = self.prepare_dataloader()
+        self.test_dl, self.num_test = self.prepare_dataloader()\
+              if not args.pretraining else self.prepare_dataloader_for_pretraining()
         self.set_wandb_config()
         self.model: nn.Module = self.load_model(args, use_best=self.args.best)
 
@@ -85,11 +86,36 @@ class EmoticPredictor:
 
         return test_dl, len(test_dataset)
     
+    def prepare_dataloader_for_pretraining(self):
+
+        print("Pulling EMOTIC dataset for pretraining: Excludes images shown to subjects...")
+        print('Prepping test dataloaders...')
+
+        data_path = "/home/dongho/brain2valence/data/emotic"
+        self.subjects = [1, 2, 5, 7] if self.args.all_subjects else [self.args.subj]
+        _, _, test_data = utils.get_emotic_df_for_pretraining(subjects=self.subjects)
+        _, _, test_context_transform, test_body_transform =\
+            utils.get_transforms_emotic()
+        
+        test_dataset = EmoticDataset(data_path=data_path,
+                                    split='test',
+                                    emotic_annotations=test_data,
+                                    context_transform=test_context_transform,
+                                    body_transform=test_body_transform,
+                                    normalize=True,
+                                    )
+
+        # always batch size is 1
+        test_dl = DataLoader(test_dataset, batch_size=1, shuffle=False)
+        print('# test data:', len(test_dataset))
+
+        return test_dl, len(test_dataset)
+    
     def load_model(self, args, use_best=True) -> nn.Module :
         model = EmoticModel(
             image_backbone=self.args.image_backbone,
             image_model_type=self.args.model_type,
-            pretrain=self.args.pretrain,
+            pretrained=self.args.pretrained,
             backbone_freeze=self.args.backbone_freeze,
             cat_only=self.args.cat_only
         )

@@ -114,7 +114,7 @@ class Predictor:
             model = EmoticModel(
                 image_backbone=self.args.model,
                 num_classif=self.args.num_classif,
-                pretrained=self.args.pretrain
+                pretrained=self.args.pretrained
             )
         elif self.args.task_type in ['reg', 'classif']:
             model = Brain2ValenceModel(

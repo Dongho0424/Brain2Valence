@@ -18,13 +18,13 @@ do
     CUDA_VISIBLE_DEVICES=${device} python3 main.py --exec_mode train --subj ${subj} \
     --wandb-log --model-name img_only_${lr} --notes 0703_3_hparam --group hparam_srch_img_only --wandb-project fMRI_Emotion --wandb-entity donghochoi \
     --epochs 30 --batch-size 52 --lr ${lr} --weight-decay 0.01 --optimizer adamw --scheduler cosine --criterion emotic_SL1 \
-    --task-type emotic --pretrain default --backbone-freeze --image-backbone resnet18 --model-type ${model_type} --data brain3d --with-nsd --cat-only & wait
+    --task-type emotic --pretrained default --backbone-freeze --image-backbone resnet18 --model-type ${model_type} --data brain3d --with-nsd --cat-only & wait
 
     # epoch, batch_size for wandb logging
     CUDA_VISIBLE_DEVICES=${device} python3 main.py --exec_mode predict --subj ${subj} \
     --wandb-log --model-name img_only_${lr} --notes 0703_3_hparam --group hparam_srch_img_only --wandb-project fMRI_Emotion --wandb-entity donghochoi \
     --epochs 30 --batch-size 52 --lr ${lr} --weight-decay 0.01 --optimizer adamw --scheduler cosine --criterion emotic_SL1 \
-    --task-type emotic --pretrain default --backbone-freeze --image-backbone resnet18 --model-type ${model_type} --data brain3d --with-nsd --cat-only \
+    --task-type emotic --pretrained default --backbone-freeze --image-backbone resnet18 --model-type ${model_type} --data brain3d --with-nsd --cat-only \
     --best & wait
 done
 

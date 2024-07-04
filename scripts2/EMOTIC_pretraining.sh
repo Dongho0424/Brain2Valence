@@ -5,35 +5,27 @@
 # 왜 Pretrained weight을 가지고 실험하는데 mAP 값이 더 낮지?
 # 오늘 EMOTIC whole dataset으로 돌린 weight 끌고 와서 실험.
 
+# 240705
+# EMOTIC dataset 중 subj1가 본 이미지를 제외한 것으로 pretraining 하기
+
 device=0
 model_type=BI # fixed after this time
 subj=1
 # notes: date_#_tag
 # group: required
-for lr in 3e-3 1e-3
+for lr in 3e-3 1e-3 3e-4 1e-4 1e-5
 do
 CUDA_VISIBLE_DEVICES=${device} python3 main.py --exec_mode train --subj ${subj} \
- --wandb-log --model-name Emotic_Pretrained_for_compare_${lr} --notes 0702_3_default_pretrain --group emotic_pretraining --wandb-project fMRI_Emotion --wandb-entity donghochoi \
+ --wandb-log --model-name Pretrainig_${lr} --notes 0705_1_excluding_intersec --group emotic_pretraining --wandb-project fMRI_Emotion --wandb-entity donghochoi \
  --epochs 30 --batch-size 52 --lr ${lr} --weight-decay 0.01 --optimizer adamw --scheduler cosine --criterion emotic_SL1 \
- --task-type brain --pretrain default --image-backbone resnet18 --model-type ${model_type} --brain-backbone mlp2 --data roi --cat-only --fusion-ver 2 & wait
+ --task-type emotic --pretrained default --pretraining --image-backbone resnet18 --model-type ${model_type} --data roi --cat-only & wait
+
 
 # epoch, batch_size for wandb logging
 CUDA_VISIBLE_DEVICES=${device} python3 main.py --exec_mode predict --subj ${subj} \
- --wandb-log --model-name Emotic_Pretrained_for_compare_${lr} --notes 0702_3_default_pretrain --group emotic_pretraining --wandb-project fMRI_Emotion --wandb-entity donghochoi \
+ --wandb-log --model-name Pretrainig_${lr} --notes 0705_1_excluding_intersec --group emotic_pretraining --wandb-project fMRI_Emotion --wandb-entity donghochoi \
  --epochs 30 --batch-size 52 --lr ${lr} --weight-decay 0.01 --optimizer adamw --scheduler cosine --criterion emotic_SL1 \
- --task-type brain --pretrain default --image-backbone resnet18 --model-type ${model_type} --brain-backbone mlp2 --data roi --cat-only --fusion-ver 2 \
+ --task-type emotic --pretrained default --pretraining --image-backbone resnet18 --model-type ${model_type} --data roi --cat-only & wait
  --best & wait
 
 done
-
-# # train using whole EMOTIC dataset
-# CUDA_VISIBLE_DEVICES=${device} python3 main.py --exec_mode train \
-#  --wandb-log --model-name train_whole_emotic_dataset --notes _0702_1 --group emotic_pretraining --wandb-project fMRI_Emotion --wandb-entity donghochoi \
-#  --epochs 30 --batch-size 52 --lr ${lr} --weight-decay 0.01 --optimizer adamw --scheduler cosine --criterion emotic_SL1 \
-#  --task-type emotic --pretrain default --backbone-freeze --image-backbone resnet18 --model-type ${model_type} --data brain3d --cat-only & wait
-
-# CUDA_VISIBLE_DEVICES=${device} python3 main.py --exec_mode predict \
-#  --wandb-log --model-name train_whole_emotic_dataset --notes _0702_1 --group emotic_pretraining --wandb-project fMRI_Emotion --wandb-entity donghochoi \
-#  --epochs 30 --batch-size 52 --lr ${lr} --weight-decay 0.01 --optimizer adamw --scheduler cosine --criterion emotic_SL1 \
-#  --task-type emotic --pretrain default --backbone-freeze --image-backbone resnet18 --model-type ${model_type} --data brain3d --cat-only \
-#  --best & wait

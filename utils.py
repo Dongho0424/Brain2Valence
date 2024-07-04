@@ -446,6 +446,21 @@ def get_transforms_emotic():
     return train_context_transform, train_body_transform, test_context_transform, test_body_transform
 
 def get_emotic_df(is_split=True):
+    """
+    Parameters
+    ---
+    is_split=True; 0.7, 0.15, 0.15 train, val, test
+    is_split=False; total dataframe
+
+    Return
+    ---
+    emotic_annotations: pd.DataFrame
+
+    Description
+    ---
+    - EMOTIC dataset: Multiple people annotated in one image.
+    - return metadata: Based on emotional annot not an image, i.e., multiple rows(annots) can be for one image.
+    """
     file_name_emotic_annot = '/home/dongho/brain2valence/data/emotic_annotations.mat'
     data = scipy.io.loadmat(file_name_emotic_annot, simplify_cells=True)
     emotic_annotations = data['train'] + data['test'] + data['val']
@@ -539,7 +554,12 @@ def get_emotic_coco_nsd_df(emotic_data, split='train', seed=42, subjects=[1, 2, 
 
     ## bring metadata
     data_path="/home/data/fsx/proj-medarc/fmri/natural-scenes-dataset/webdataset_avg_split"
-    if split in ['train', 'val']:
+    if split == "all":
+        dfs = [pd.read_csv(os.path.join(data_path, f'train_subj0{subj}_metadata.csv')) for subj in subjects]
+        dfs += [pd.read_csv(os.path.join(data_path, f'val_subj0{subj}_metadata.csv')) for subj in subjects]
+        dfs += [pd.read_csv(os.path.join(data_path, f'test_subj0{subj}_metadata.csv')) for subj in subjects]
+        metadata = pd.concat(dfs).reset_index(inplace=False, drop=True)
+    elif split in ['train', 'val']:
         dfs = [pd.read_csv(os.path.join(data_path, f'train_subj0{subj}_metadata.csv')) for subj in subjects]
         dfs += [pd.read_csv(os.path.join(data_path, f'val_subj0{subj}_metadata.csv')) for subj in subjects]
         metadata = pd.concat(dfs).reset_index(inplace=False, drop=True)
@@ -565,6 +585,33 @@ def get_emotic_coco_nsd_df(emotic_data, split='train', seed=42, subjects=[1, 2, 
         .rename(columns={'voxel': 'roi', 'mri': 'brain3d'})
 
     return emotic_coco_nsd
+
+def get_emotic_df_for_pretraining(subjects):
+    """
+    Descriptions
+    ---
+    Return Emotic df excluding images shown to given subjects, for pretraining.
+    1. Using `utils.get_emotic_df()` to get emotic_df
+    2. Get df given subjects, which is simply using `get_emotic_coco_nsd_df`
+    3. Get emotic_df - subject_df (images which are not in subject_df)
+    4. Return train, val, test df with split ratio 0.7, 0.15, 0.15
+    """
+    # If just one subject
+    # emotic_df: 33961
+    # subj_df: 1614
+    # metadata: 32347 = 33961 - 1614
+    emotic_df = get_emotic_df(is_split=False)
+    subj_df = get_emotic_coco_nsd_df(emotic_data=emotic_df, split='all', subjects=subjects)
+    metadata = emotic_df[~emotic_df['image_id'].isin(subj_df['image_id'])]
+    total_len = len(metadata)
+    train_len = int(total_len * 0.7)
+    val_len = int(total_len * 0.15)
+
+    train_data = metadata.iloc[:train_len].dropna().reset_index(inplace=False, drop=True)  # 22642
+    val_data = metadata.iloc[train_len:train_len+val_len].dropna().reset_index(inplace=False, drop=True)  # 4852
+    test_data = metadata.iloc[train_len+val_len:].dropna().reset_index(inplace=False, drop=True)  # 4853, total 32347
+
+    return train_data, val_data, test_data
 
 def get_emotic_categories():
     categories = ['Affection', 'Anger', 'Annoyance', 'Anticipation', 'Aversion', 'Confidence', 'Disapproval',

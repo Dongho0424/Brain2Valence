@@ -22,12 +22,12 @@ do
     CUDA_VISIBLE_DEVICES=${device} python3 main.py --exec_mode train --subj ${subj} \
     --wandb-log --model-name pretrained_roi_img_${lr}_${mlp_ver}_fus${fusion_ver} --notes 0704_1_not_freeze --group pretrained_roi_not_freeze --wandb-project fMRI_Emotion --wandb-entity donghochoi \
     --epochs 30 --batch-size 52 --lr ${lr} --weight-decay 0.01 --optimizer adamw --scheduler cosine --criterion emotic_SL1 \
-    --task-type brain --pretrain EMOTIC --image-backbone resnet18 --model-type ${model_type} --brain-backbone ${mlp_ver} --data roi --cat-only --fusion-ver ${fusion_ver} & wait
+    --task-type brain --pretrained EMOTIC --image-backbone resnet18 --model-type ${model_type} --brain-backbone ${mlp_ver} --data roi --cat-only --fusion-ver ${fusion_ver} & wait
 
     CUDA_VISIBLE_DEVICES=${device} python3 main.py --exec_mode predict --subj ${subj} \
     --wandb-log --model-name pretrained_roi_img_${lr}_${mlp_ver}_fus${fusion_ver} --notes 0704_1_not_freeze --group pretrained_roi_not_freeze --wandb-project fMRI_Emotion --wandb-entity donghochoi \
     --epochs 30 --batch-size 52 --lr ${lr} --weight-decay 0.01 --optimizer adamw --scheduler cosine --criterion emotic_SL1 \
-    --task-type brain --pretrain EMOTIC --image-backbone resnet18 --model-type ${model_type} --brain-backbone ${mlp_ver} --data roi --cat-only --fusion-ver ${fusion_ver} \
+    --task-type brain --pretrained EMOTIC --image-backbone resnet18 --model-type ${model_type} --brain-backbone ${mlp_ver} --data roi --cat-only --fusion-ver ${fusion_ver} \
     --best & wait
 
 done

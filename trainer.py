@@ -90,7 +90,7 @@ class Trainer:
             model = EmoticModel(
                 image_backbone=self.args.model,
                 num_classif=self.args.num_classif,
-                pretrained=self.args.pretrain,
+                pretrained=self.args.pretrained,
                 backbone_freeze=self.args.backbone_freeze,
             )
         elif self.args.task_type in ['reg', 'classif']:

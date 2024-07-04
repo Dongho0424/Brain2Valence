@@ -19,7 +19,8 @@ class EmoticTrainer:
         self.args = args
 
         self.set_device()
-        self.train_dl, self.val_dl, self.num_train, self.num_val = self.prepare_dataloader()
+        self.train_dl, self.val_dl, self.num_train, self.num_val = self.prepare_dataloader()\
+              if not args.pretraining else self.prepare_dataloader_for_pretraining()
         self.set_wandb_config()
         self.model: nn.Module = self.get_model()
         self.optimizer = self.get_optimizer()
@@ -111,12 +112,46 @@ class EmoticTrainer:
         print('# val data:', len(val_dataset))
 
         return train_dl, val_dl, len(train_dataset), len(val_dataset)
+    
+    def prepare_dataloader_for_pretraining(self):
+
+        print("Pulling EMOTIC dataset for pretraining: Excludes images shown to subjects...")
+        print('Prepping train and validation dataloaders...')
+
+        data_path = "/home/dongho/brain2valence/data/emotic"
+        self.subjects = [1, 2, 5, 7] if self.args.all_subjects else [self.args.subj]
+        train_data, val_data, _ = utils.get_emotic_df_for_pretraining(subjects=self.subjects)
+        train_context_transform, train_body_transform, test_context_transform, test_body_transform =\
+            utils.get_transforms_emotic()
+        
+        train_dataset = EmoticDataset(data_path=data_path,
+                                      split='train',
+                                      emotic_annotations=train_data,
+                                      context_transform=train_context_transform,
+                                      body_transform=train_body_transform,
+                                      normalize=True,
+                                      )
+
+        val_dataset = EmoticDataset(data_path=data_path,
+                                    split='val',
+                                    emotic_annotations=val_data,
+                                    context_transform=test_context_transform,
+                                    body_transform=test_body_transform,
+                                    normalize=True,
+                                    )
+
+        train_dl = DataLoader(train_dataset, batch_size=self.args.batch_size, shuffle=True)
+        val_dl = DataLoader(val_dataset, batch_size=self.args.batch_size, shuffle=False)
+        print('# train data:', len(train_dataset))
+        print('# val data:', len(val_dataset))
+
+        return train_dl, val_dl, len(train_dataset), len(val_dataset)
 
     def get_model(self):
         model = EmoticModel(
             image_backbone=self.args.image_backbone,
             image_model_type=self.args.model_type,
-            pretrain=self.args.pretrain,
+            pretrained=self.args.pretrained,
             backbone_freeze=self.args.backbone_freeze,
             cat_only=self.args.cat_only
         )

@@ -65,7 +65,7 @@ def get_args():
 
     # task type: image to VAD
     img2vad_args = args.add_argument_group('img2vad')
-    img2vad_args.add_argument('--pretrain', type=str, default="None", choices=["None", "default", "EMOTIC"], help='default: pretrained by ImageNet + Places365, EMOTIC: pretrained by EMOTIC dataset')  
+    img2vad_args.add_argument('--pretrained', type=str, default="None", choices=["None", "default", "EMOTIC"], help='default: pretrained by ImageNet + Places365, EMOTIC: pretrained by EMOTIC dataset')  
     img2vad_args.add_argument('--backbone-freeze', action='store_true', default=False, help='Freeze pretrained backbone')
     
     # EMOTIC Reproduce
@@ -73,6 +73,7 @@ def get_args():
     emotic_args.add_argument("--model-type", type=str, default="BI", choices=["BI", "B", "I", "brain_only"], help="BI: use both body and image") 
     emotic_args.add_argument("--coco-only", action="store_true", help="Use EMOTIC && COCO dataset", default=False)
     emotic_args.add_argument("--with-nsd", action="store_true", help="Use NSD dataset given subjects", default=False)
+    emotic_args.add_argument("--pretraining", action="store_true", help="Pretraining with EMOTIC dataset", default=False)
 
     # Brain Task
     # use brain3d or roi as guidance to help predicting image => emotic categories
