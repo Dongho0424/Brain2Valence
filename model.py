@@ -49,72 +49,22 @@ class BrainModel(nn.Module):
         print("Category Prediction Only:", cat_only)
         print("#############################")
 
-        ## Image Model
+        ## Image Model ##
         if self.image_backbone == "resnet18":
 
             # context model
             model_context: ResNet = __dict__[self.image_backbone](num_classes=365)
             # body model
             model_body = resnet18()
-
-            # Pretrain Setting
-            if self.pretrain == "None":
-                print("Context & Body model: train from scratch")
-                self.context_last_feature = list(model_context.children())[-1].in_features
-                self.model_context = nn.Sequential(*list(model_context.children())[:-1])
-                self.body_last_feature = list(model_body.children())[-1].in_features
-                self.model_body = nn.Sequential(*list(model_body.children())[:-1])
-            elif self.pretrain == "default": 
-                # context model pretrained by Places365 dataset
-                print("Context model: Use pretrained model by Places365 dataset")
-                context_state_dict = torch.load('/home/dongho/brain2valence/data/places/resnet18_state_dict.pth')
-                model_context.load_state_dict(context_state_dict)
-                # body model pretrained by ImageNet dataset
-                print("Body model: Use pretrained model by ImageNet dataset")
-                model_body = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
-
-                self.context_last_feature = list(model_context.children())[-1].in_features
-                self.model_context = nn.Sequential(*list(model_context.children())[:-1])
-                self.body_last_feature = list(model_body.children())[-1].in_features
-                self.model_body = nn.Sequential(*list(model_body.children())[:-1])
-
-            elif self.pretrain == "EMOTIC":
-                print("Context model: Use pretrained model by EMOTIC dataset")
-                print("Body model: Use pretrained model by EMOTIC dataset")
-
-                self.context_last_feature = list(model_context.children())[-1].in_features
-                self.model_context = nn.Sequential(*list(model_context.children())[:-1])
-                self.body_last_feature = list(model_body.children())[-1].in_features
-                self.model_body = nn.Sequential(*list(model_body.children())[:-1])
-
-                target_model_dir = "/home/dongho/brain2valence/trained_models/pretrain_whole_emotic_dataset_0702_not_freeze/best_model.pth"
-
-                pretrained_weights = torch.load(target_model_dir)
-                self.load_state_dict(pretrained_weights, strict=False)  # load both context and body
+            # features
+            self.context_last_feature = list(model_context.children())[-1].in_features
+            self.body_last_feature = list(model_body.children())[-1].in_features
 
         # TODO : implement resnet50
         elif self.image_backbone == "resnet50":
             raise NotImplementedError("resnet50 is not implemented for image model")
-            # # temporarily
-            # assert self.model_type == 'B', "resnet50 is only for model_type: B"
-            # # load pretrained model
-            # self.model_body = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2) if pretrained else resnet50()
-            # # freeze parameters
-            # if backbone_freeze:
-            #     for param in self.model_body.parameters():
-            #         param.requires_grad = False
-            # # add layer for fine tuning
-            # num_ftrs = self.model_body.fc.in_features
-            # # self.model.fc = nn.Linear(num_ftrs, num_classes)
-            # self.model_body.fc = nn.Sequential(
-            #     nn.Linear(num_ftrs, 256),
-            #     nn.BatchNorm1d(256),
-            #     nn.ReLU(),
-            #     nn.Dropout(0.5),
-            #     nn.Linear(256, 3)
-            # )
-
-        ## Brain Model
+            
+        ## Brain Model ##
         if self.brain_backbone == "resnet18":
             self.res_model = ResNetwClf(backbone_type='resnet_18', num_classes=brain_out_feature)
         elif self.brain_backbone == "resnet50":
@@ -160,7 +110,7 @@ class BrainModel(nn.Module):
                 nn.Linear(1024, brain_out_feature, bias=True),
             )
 
-        # fusion model 
+        ## fusion model ##
         # three backbones corresponding to model type
         fuse_in_features = 0
         if self.image_model_type == "B": fuse_in_features = self.body_last_feature
@@ -172,8 +122,7 @@ class BrainModel(nn.Module):
         fuse_in_features += brain_out_feature # 512 or 1024 or 1536
         fuse_out_features = 256
 
-        # TODO: 여기가 별로 맘에 들지 않음.
-        if fusion_ver == 1:
+        if fusion_ver == 1: # EMOTIC paper ver.
             self.model_fusion = nn.Sequential(
                 nn.Linear(fuse_in_features, fuse_out_features),
                 nn.BatchNorm1d(fuse_out_features),
@@ -195,11 +144,63 @@ class BrainModel(nn.Module):
             )
         else: raise NotImplementedError(f"fusion version {fusion_ver} is not implemented")
 
+        ## Final Layers ##
         if self.cat_only:
             self.fc_cat = nn.Linear(fuse_out_features, 26)
         else:
             self.fc_cat = nn.Linear(fuse_out_features, 26)
             self.fc_vad = nn.Linear(fuse_out_features, 3)
+
+        ## Using Pretrained Weights ## 
+        if self.pretrain == "None":
+            print("Context & Body model: train from scratch")
+            # remove last layer
+            self.model_context = nn.Sequential(*list(model_context.children())[:-1])
+            self.model_body = nn.Sequential(*list(model_body.children())[:-1])
+
+        elif self.pretrain == "default": 
+            # context model pretrained by Places365 dataset
+            print("Context model: Use pretrained model by Places365 dataset")
+            context_state_dict = torch.load('/home/dongho/brain2valence/data/places/resnet18_state_dict.pth')
+            model_context.load_state_dict(context_state_dict)
+            # body model pretrained by ImageNet dataset
+            print("Body model: Use pretrained model by ImageNet dataset")
+            model_body = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
+            model_body = nn.Sequential(*list(model_body.children())[:-1])
+
+            # remove last layer
+            self.model_context = nn.Sequential(*list(model_context.children())[:-1])
+            self.model_body = nn.Sequential(*list(model_body.children())[:-1])
+
+        elif self.pretrain == "EMOTIC":
+            assert fusion_ver == 1, "EMOTIC pretrained model is only available for fusion_ver=1"
+            print("Context model: Use pretrained model by EMOTIC dataset")
+            print("Body model: Use pretrained model by EMOTIC dataset")
+
+            # The pretrained weights of emotic model using EMOTIC dataset
+            target_model_dir = "/home/dongho/brain2valence/trained_models/Pretrainig_3e-30705_1_excluding_intersec/best_model.pth"
+            print("pretrained weight dir:", target_model_dir)
+            pretrained_weights = torch.load(target_model_dir)
+            # We now want to feed pretrained weights into image_model, fusion network, final layers, excluding brain_model.
+            # However, the input sizes of the fusion network are different between brain_model and emotic_model
+            # As only the first layer's size is different, only adjusting the first layer of fusion network is needed
+            first_fusion_layer_key = "model_fusion.0.weight"
+            prev_weight = pretrained_weights[first_fusion_layer_key]
+            # input: fuse_in = torch.cat([x_body, x_context, x_brain], 1)
+            # n * 1536 fuse_in; left 1024 from image data, right 512 from brain data
+            # 1536 * 256 weight; upper 1024 * 256 is fed pretrained, lower 512 * 256 is zero initialized
+            # But the weight of FFN in Sequential() is transposed.
+            # Therefore, according to weight size 256 * 1536, left 256 * 1024 is fed pretrained, right 256 * 512 is zero initialized
+            new_weight = torch.cat([prev_weight, torch.zeros(256, 512)], dim=1)
+
+            pretrained_weights[first_fusion_layer_key] = new_weight
+
+            # remove last layer
+            self.model_context = nn.Sequential(*list(model_context.children())[:-1])
+            self.model_body = nn.Sequential(*list(model_body.children())[:-1])
+
+            self.load_state_dict(pretrained_weights, strict=False)
+            print(self.state_dict()[first_fusion_layer_key])
         
         # freeze pretrained parameters
         if backbone_freeze:
