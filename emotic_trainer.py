@@ -191,7 +191,12 @@ class EmoticTrainer:
         return scheduler
 
     def get_criterion(self):
-        disc = DiscreteLoss(weight_type='dynamic', device=self.device)
+        if self.args.cat_criterion == "emotic":
+            disc = DiscreteLoss(weight_type='dynamic', device=self.device)
+        elif self.args.cat_criterion == "softmargin":
+            disc = nn.MultiLabelSoftMarginLoss(reduction='sum')
+        else: raise NotImplementedError(f'criterion {self.args.cat_criterion} is not implemented')
+
         if self.args.criterion == "emotic_L2":
             cont = ContinuousLoss_L2(margin=0.1)
         elif self.args.criterion == "emotic_SL1":

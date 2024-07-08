@@ -280,10 +280,12 @@ class BrainModel(nn.Module):
             fuse_out = self.model_fusion(x_brain)
 
         if self.cat_only:
-            cat_out = F.sigmoid(self.fc_cat(fuse_out))
+            # return logit
+            cat_out = self.fc_cat(fuse_out)
             return cat_out
         else:
-            cat_out = F.sigmoid(self.fc_cat(fuse_out))
+            # return logit
+            cat_out = self.fc_cat(fuse_out)
             vad_out = self.fc_vad(fuse_out)
             return cat_out, vad_out
 
@@ -411,10 +413,10 @@ class EmoticModel(nn.Module):
             fuse_out = self.model_fusion(fuse_in)
             
         if self.cat_only:
-            cat_out = F.sigmoid(self.fc_cat(fuse_out))
+            cat_out = self.fc_cat(fuse_out)
             return cat_out
         else:
-            cat_out = F.sigmoid(self.fc_cat(fuse_out))
+            cat_out = self.fc_cat(fuse_out)
             vad_out = self.fc_vad(fuse_out)
             return cat_out, vad_out
 

@@ -38,6 +38,7 @@ def get_args():
 
     # for train
     args.add_argument("--criterion", type=str, default="mae", choices=["mse", "mae", "ce", "emotic_L2", "emotic_SL1"], help="Criterion. mse or mae for valence, crossentropy for classification") 
+    args.add_argument("--cat-criterion", type=str, default="emotic", choices=["emotic", "softmargin"], help="MultiLabel clf, loss in EMOTIC paper or BCEloss (actually same as MultiLabelSoftMarginLoss)") 
     args.add_argument("--epochs", type=int, default=100, help="Number of epochs")
     args.add_argument("--batch-size", type=int, default=16, help="Batch size")
     args.add_argument("--lr", type=float, default=1e-4, help="Learning rate")

@@ -7,6 +7,17 @@
 # - mlp2
 # - fusion1
 
+# 240705
+# pretraining: sub1가 본 이미지를 제외한 EMOTIC dataset으로 
+# revised BrainModel ( pretrained weight, image, fusion, final 전부 사용하는 모델 )
+# roi + image
+# lr 바꿔서 해보기
+# backbone freeze
+# ** loss: MultiLabelSoftMargin Loss **
+# - lr: 3e-3 1e-3 3e-4 1e-4 3e-5 1e-5 1e-6
+# - weight decay: 0.01, 0.05 (more decayed for preventing overfitting)
+# - mlp2 fixed
+# - fusion1 fixed
 device=0
 model_type=BI # fixed after this time
 subj=1
@@ -14,21 +25,23 @@ subj=1
 # group: required
 fusion_ver=1
 mlp_ver=mlp2
-for lr in 3e-3 1e-3 3e-4 1e-4
+cat_loss=softmargin
+
+for lr in 3e-3 1e-3 3e-4 1e-4 3e-5 1e-5 1e-6
 do
-    
-    echo "Training Start....: lr: $lr, fusion_ver: $fusion_ver, mlp_ver: $mlp_ver"
+    for wd in 0.01 0.05
+    do
+        echo "Training Start....: lr: $lr, fusion_ver: $fusion_ver, mlp_ver: $mlp_ver, weight_decay: $wd"
 
-    CUDA_VISIBLE_DEVICES=${device} python3 main.py --exec_mode train --subj ${subj} \
-    --wandb-log --model-name pretrained_roi_img_${lr}_${mlp_ver}_fus${fusion_ver} --notes 0704_1_not_freeze --group pretrained_roi_not_freeze --wandb-project fMRI_Emotion --wandb-entity donghochoi \
-    --epochs 30 --batch-size 52 --lr ${lr} --weight-decay 0.01 --optimizer adamw --scheduler cosine --criterion emotic_SL1 \
-    --task-type brain --pretrained EMOTIC --image-backbone resnet18 --model-type ${model_type} --brain-backbone ${mlp_ver} --data roi --cat-only --fusion-ver ${fusion_ver} & wait
+        CUDA_VISIBLE_DEVICES=${device} python3 main.py --exec_mode train --subj ${subj} \
+        --wandb-log --model-name finetuning_roi_img_${lr}_wd${wd} --notes _0705_1_softmargin --group finetuning_roi_img_softmargin --wandb-project fMRI_Emotion --wandb-entity donghochoi \
+        --epochs 30 --batch-size 52 --lr ${lr} --weight-decay ${wd} --optimizer adamw --scheduler cosine --criterion emotic_SL1 --cat-criterion ${cat_loss} \
+        --task-type brain --pretrained EMOTIC --backbone-freeze --image-backbone resnet18 --model-type ${model_type} --brain-backbone ${mlp_ver} --data roi --cat-only --fusion-ver ${fusion_ver} & wait
 
-    CUDA_VISIBLE_DEVICES=${device} python3 main.py --exec_mode predict --subj ${subj} \
-    --wandb-log --model-name pretrained_roi_img_${lr}_${mlp_ver}_fus${fusion_ver} --notes 0704_1_not_freeze --group pretrained_roi_not_freeze --wandb-project fMRI_Emotion --wandb-entity donghochoi \
-    --epochs 30 --batch-size 52 --lr ${lr} --weight-decay 0.01 --optimizer adamw --scheduler cosine --criterion emotic_SL1 \
-    --task-type brain --pretrained EMOTIC --image-backbone resnet18 --model-type ${model_type} --brain-backbone ${mlp_ver} --data roi --cat-only --fusion-ver ${fusion_ver} \
-    --best & wait
-
+        CUDA_VISIBLE_DEVICES=${device} python3 main.py --exec_mode predict --subj ${subj} \
+        --wandb-log --model-name finetuning_roi_img_${lr}_wd${wd} --notes _0705_1_softmargin --group finetuning_roi_img_softmargin --wandb-project fMRI_Emotion --wandb-entity donghochoi \
+        --epochs 30 --batch-size 52 --lr ${lr} --weight-decay ${wd} --optimizer adamw --scheduler cosine --criterion emotic_SL1 --cat-criterion ${cat_loss} \
+        --task-type brain --pretrained EMOTIC --backbone-freeze --image-backbone resnet18 --model-type ${model_type} --brain-backbone ${mlp_ver} --data roi --cat-only --fusion-ver ${fusion_ver} \
+        --best & wait
+    done
 done
-

@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 class DiscreteLoss(nn.Module):
   ''' Class to measure loss between categorical emotion predictions and labels.'''
@@ -20,7 +21,7 @@ class DiscreteLoss(nn.Module):
     if self.weight_type == 'dynamic':
       self.weights = self.prepare_dynamic_weights(target)
       self.weights = self.weights.to(self.device)
-    loss = (((pred - target)**2) * self.weights)
+    loss = (((F.sigmoid(pred) - target)**2) * self.weights)
     return loss.sum() 
 
   def prepare_dynamic_weights(self, target):
