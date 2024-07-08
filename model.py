@@ -18,7 +18,7 @@ class BrainModel(nn.Module):
                  backbone_freeze=False,
                  subjects = [1, 2, 5, 7], # for subject specific mlp model
                  cat_only = False,
-                 fusion_ver=1, # 1 or 2
+                 fusion_ver=1, # 1 or 2, 999 for one-point
                  ):
         super().__init__()
 
@@ -142,6 +142,13 @@ class BrainModel(nn.Module):
                 nn.GELU(),
                 nn.Linear(fuse_in_features, fuse_out_features),
             )
+        elif fusion_ver == 999: # Replace BatchNorm to LayerNorm
+            self.model_fusion = nn.Sequential(
+                nn.Linear(fuse_in_features, fuse_out_features),
+                nn.LayerNorm(fuse_out_features),
+                nn.ReLU(),
+                nn.Dropout(p=0.5)
+            )
         else: raise NotImplementedError(f"fusion version {fusion_ver} is not implemented")
 
         ## Final Layers ##
@@ -166,7 +173,6 @@ class BrainModel(nn.Module):
             # body model pretrained by ImageNet dataset
             print("Body model: Use pretrained model by ImageNet dataset")
             model_body = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
-            model_body = nn.Sequential(*list(model_body.children())[:-1])
 
             # remove last layer
             self.model_context = nn.Sequential(*list(model_context.children())[:-1])

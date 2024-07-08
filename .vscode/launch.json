@@ -125,6 +125,44 @@
                 "--cat-only",
                 "--fusion-ver", "1"
             ]
+        }, 
+        {
+            "name": "One-Point Training",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "console": "integratedTerminal",
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "0"
+            },
+            "args": [
+                "--exec_mode", "train",
+                "--subj", "1",
+                "--one-point",
+                "--wandb-log",
+                "--model-name", "one_point_1e-4",
+                "--notes", "0708_1",
+                "--group", "one_point",
+                "--wandb-project", "fMRI_Emotion",
+                "--wandb-entity", "donghochoi",
+                "--epochs", "300",
+                "--batch-size", "1",
+                "--lr", "1e-4",
+                "--weight-decay", "0.01",
+                "--optimizer", "adamw",
+                "--scheduler", "cosine",
+                "--criterion", "emotic_SL1",
+                "--cat-criterion", "softmargin",
+                "--task-type", "brain",
+                "--pretrained", "default",
+                "--backbone-freeze",
+                "--image-backbone", "resnet18",
+                "--model-type", "BI",
+                "--brain-backbone", "mlp2",
+                "--data", "roi",
+                "--cat-only",
+                "--fusion-ver", "1"
+            ]
         }
     ]
 }

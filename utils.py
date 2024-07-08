@@ -554,7 +554,7 @@ def get_emotic_coco_nsd_df(emotic_data, split='train', seed=42, subjects=[1, 2, 
 
     ## bring metadata
     data_path="/home/data/fsx/proj-medarc/fmri/natural-scenes-dataset/webdataset_avg_split"
-    if split == "all":
+    if split in ["all", "one_point"]: # for debugging
         dfs = [pd.read_csv(os.path.join(data_path, f'train_subj0{subj}_metadata.csv')) for subj in subjects]
         dfs += [pd.read_csv(os.path.join(data_path, f'val_subj0{subj}_metadata.csv')) for subj in subjects]
         dfs += [pd.read_csv(os.path.join(data_path, f'test_subj0{subj}_metadata.csv')) for subj in subjects]
@@ -569,6 +569,7 @@ def get_emotic_coco_nsd_df(emotic_data, split='train', seed=42, subjects=[1, 2, 
     elif split == 'test':
         dfs = [pd.read_csv(os.path.join(data_path, f'test_subj0{subj}_metadata.csv')) for subj in subjects]
         metadata = pd.concat(dfs).reset_index(inplace=False, drop=True)
+    else: raise ValueError("split must be one of ['train', 'val', 'test', 'all', 'one_point']")
     # rename
     metadata = metadata.rename(columns={'coco': 'nsd_id_filename'})
 
@@ -583,6 +584,11 @@ def get_emotic_coco_nsd_df(emotic_data, split='train', seed=42, subjects=[1, 2, 
     emotic_coco_nsd = pd.merge(emotic_coco, metadata, on='image_id', how='inner')\
         .drop(columns=['img', 'trial', 'num_uniques'])\
         .rename(columns={'voxel': 'roi', 'mri': 'brain3d'})
+    
+    # For debugging
+    # Filter out by the length of category and always take the first one
+    if split == "one_point":
+        emotic_coco_nsd = emotic_coco_nsd[emotic_coco_nsd["category"].apply(lambda x: len(x) == 3)].head(1)
 
     return emotic_coco_nsd
 

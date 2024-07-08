@@ -54,9 +54,9 @@ class BrainPredictor():
         self.subjects = [1, 2, 5, 7] if self.args.all_subjects else [self.args.subj]
 
         _, _, test_context_transform, test_body_transform = utils.get_transforms_emotic()
-
+        test_split = 'one_point' if self.args.one_point else 'test'
         test_dataset = BrainDataset(subjects=self.subjects,
-                                    split='test',
+                                    split=test_split,
                                     data_type=self.args.data,
                                     context_transform=test_context_transform,
                                     body_transform=test_body_transform,
@@ -142,13 +142,13 @@ class BrainPredictor():
 
         # plot AP per category
         plt.figure(figsize=(10, 8))
-        plt.title('Average Prevision per category')
+        plt.title('Average Precision per category')
         plt.yscale('log')
         plt.xticks(range(26), [f"{i}. {idx2cat[i]}" for i in range(26)], rotation=-90)
         for i, ap in enumerate(ap_scores):
             plt.bar(i, ap)
             plt.text(i, ap, f'{ap:.4f}', ha='center', va='bottom')
-        wandb.log({f"Average Prevision per category": wandb.Image(plt)})
+        wandb.log({f"Average Precision per category": wandb.Image(plt)})
         plt.clf()
 
         if not self.args.cat_only: # when predict vad only

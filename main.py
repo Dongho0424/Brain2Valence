@@ -52,6 +52,7 @@ def get_args():
     args.add_argument("--n_layers", type=int, default=1, help="Number of layers")
     args.add_argument("--mode", type=str, default="valence", help="Mode", choices=["both", "valence"])
     args.add_argument("--mix_dataset", action="store_true", help="Mix dataset", default=False)
+    args.add_argument("--one-point", action="store_true", help="Debugging, only one data point training", default=False)
 
     # for predict
     args.add_argument("--best", action="store_true", help="Use best model", default=False)
@@ -83,7 +84,7 @@ def get_args():
     emotic_args.add_argument("--brain-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50", "mlp1", "mlp2"], help="Brain backbone")
     # only predict category. Update model, criterion, training, validation, predict 
     emotic_args.add_argument("--cat-only",  action="store_true", help="predict cat only", default=False)
-    emotic_args.add_argument("--fusion-ver", type=int, default=1, choices=[1, 2], help="1: EMOTIC, 2: bn")
+    emotic_args.add_argument("--fusion-ver", type=int, default=1, choices=[1, 2, 999], help="1: EMOTIC, 2: bn, 999: one_point")
 
 
     args = args.parse_args()

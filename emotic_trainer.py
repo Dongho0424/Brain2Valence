@@ -54,6 +54,7 @@ class EmoticTrainer:
 
         wandb.init(
             id=self.args.model_name+self.args.notes,
+            entity="donghochoi",
             project=wandb_project,
             name=self.args.model_name,
             group=self.args.group,
