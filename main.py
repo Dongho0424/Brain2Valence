@@ -19,7 +19,7 @@ def get_args():
     args.add_argument('--wandb-log', action='store_true', help='use wandb')
     # wandb_name: wandb의 id로 쓰이면서, 날짜, 모델, lr, 등등 wandb log에서 구분하기 쉽도록 함.
     # ex) 240203_res18_mae_01_predict
-    # args.add_argument('--wandb-name', type=str, default='test', help='name as id, particular wandb run')
+    args.add_argument('--wandb-name', type=str, help='wandb name. if none, same with model_name')
     args.add_argument('--wandb-project', type=str, default='Brain2Valence', help='name of wandb project')
     args.add_argument('--wandb-entity', type=str, default='donghochoi', help='name of wandb entity')
     args.add_argument('--group', type=str, required=True, help='group name for wandb run')

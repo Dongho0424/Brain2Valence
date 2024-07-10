@@ -8,10 +8,6 @@
 # batch_size: 1
 # pretrained: default
 
-# 결과
-# AP 결과를 보니까 5개의 cat에 대해 정확히 일치하는 것을 보여줌.
-# 근데 AUPRC가 0.2임. 왜? 완벽하게 맞춘 거 아니야?
-
 device=0
 model_type=BI # fixed after this time
 subj=1
@@ -22,13 +18,13 @@ fusion_ver=999
 mlp_ver=mlp2
 cat_loss=softmargin
 CUDA_VISIBLE_DEVICES=${device} python3 main.py --exec_mode train --subj ${subj} --one-point \
-    --wandb-log --model-name one_point_${lr} --notes 0708_1 --group one_point --wandb-project fMRI_Emotion --wandb-entity donghochoi \
+    --wandb-log --model-name one_point_${lr}_scratch --notes 0709_1 --group one_point --wandb-project fMRI_Emotion --wandb-entity donghochoi \
     --epochs 300 --batch-size 1 --lr ${lr} --weight-decay 0.01 --optimizer adamw --scheduler cosine --criterion emotic_SL1 --cat-criterion ${cat_loss} \
-    --task-type brain --pretrained default --backbone-freeze --image-backbone resnet18 --model-type ${model_type} --brain-backbone ${mlp_ver} --data roi --cat-only --fusion-ver ${fusion_ver} & wait
+    --task-type brain --pretrained None --image-backbone resnet18 --model-type ${model_type} --brain-backbone ${mlp_ver} --data roi --cat-only --fusion-ver ${fusion_ver} & wait
 
 CUDA_VISIBLE_DEVICES=${device} python3 main.py --exec_mode predict --subj ${subj} --one-point \
-    --wandb-log --model-name one_point_${lr} --notes 0708_1 --group one_point --wandb-project fMRI_Emotion --wandb-entity donghochoi \
+    --wandb-log --model-name one_point_${lr}_scratch --notes 0709_1 --group one_point --wandb-project fMRI_Emotion --wandb-entity donghochoi \
     --epochs 300 --batch-size 1 --lr ${lr} --weight-decay 0.01 --optimizer adamw --scheduler cosine --criterion emotic_SL1 --cat-criterion ${cat_loss} \
-    --task-type brain --pretrained default --backbone-freeze --image-backbone resnet18 --model-type ${model_type} --brain-backbone ${mlp_ver} --data roi --cat-only --fusion-ver ${fusion_ver} \
+    --task-type brain --pretrained None --image-backbone resnet18 --model-type ${model_type} --brain-backbone ${mlp_ver} --data roi --cat-only --fusion-ver ${fusion_ver} \
     --best & wait
 

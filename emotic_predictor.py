@@ -38,11 +38,11 @@ class EmoticPredictor:
             "weight_decay": self.args.weight_decay,
         }
         print("wandb_config:\n",wandb_config)
-
+        wandb_name = self.args.wandb_name if self.args.wandb_name != None else self.args.model_name
         wandb.init(
-            id=self.args.model_name+self.args.notes,
+            id=wandb_name+self.args.notes,
             project=wandb_project,
-            name=self.args.model_name,
+            name=wandb_name,
             group=self.args.group,
             config=wandb_config,
             resume="allow",

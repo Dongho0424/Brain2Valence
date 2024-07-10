@@ -13,19 +13,32 @@ model_type=BI # fixed after this time
 subj=1
 # notes: date_#_tag
 # group: required
-for lr in 5e-4 3e-5 1e-6
+for lr in 3e-3 1e-4 3e-4 5e-4 1e-5 3e-5 1e-6 # 2e-5 9e-6
 do
-CUDA_VISIBLE_DEVICES=${device} python3 main.py --exec_mode train --subj ${subj} \
- --wandb-log --model-name Pretrainig_${lr} --notes 0705_1_excluding_intersec --group emotic_pretraining --wandb-project fMRI_Emotion --wandb-entity donghochoi \
- --epochs 30 --batch-size 52 --lr ${lr} --weight-decay 0.01 --optimizer adamw --scheduler cosine --criterion emotic_SL1 \
- --task-type emotic --pretrained default --pretraining --image-backbone resnet18 --model-type ${model_type} --data roi --cat-only & wait
+# CUDA_VISIBLE_DEVICES=${device} python3 main.py --exec_mode train --subj ${subj} \
+#  --wandb-log --model-name Pretrainig_${lr}_best --notes 0709_1_excluding_intersec --group emotic_pretraining --wandb-project fMRI_Emotion --wandb-entity donghochoi \
+#  --epochs 30 --batch-size 52 --lr ${lr} --weight-decay 0.01 --optimizer adamw --scheduler cosine --criterion emotic_SL1 \
+#  --task-type emotic --pretrained default --pretraining --image-backbone resnet18 --model-type ${model_type} --data roi --cat-only & wait
 
 
 # epoch, batch_size for wandb logging
 CUDA_VISIBLE_DEVICES=${device} python3 main.py --exec_mode predict --subj ${subj} \
- --wandb-log --model-name Pretrainig_${lr} --notes 0705_1_excluding_intersec --group emotic_pretraining --wandb-project fMRI_Emotion --wandb-entity donghochoi \
+ --wandb-log --model-name Pretrainig_${lr} --wandb-name Pretrainig_${lr}_best --notes 0705_1_excluding_intersec \
+ --group emotic_pretraining --wandb-project fMRI_Emotion --wandb-entity donghochoi \
  --epochs 30 --batch-size 52 --lr ${lr} --weight-decay 0.01 --optimizer adamw --scheduler cosine --criterion emotic_SL1 \
- --task-type emotic --pretrained default --pretraining --image-backbone resnet18 --model-type ${model_type} --data roi --cat-only & wait
+ --task-type emotic --pretrained default --pretraining --image-backbone resnet18 --model-type ${model_type} --data roi --cat-only \
+ --best & wait
+
+done
+
+for lr in 2e-5 9e-6
+do
+
+CUDA_VISIBLE_DEVICES=${device} python3 main.py --exec_mode predict --subj ${subj} \
+ --wandb-log --model-name Pretrainig_${lr} --wandb-name Pretrainig_${lr}_best --notes 0708_1_excluding_intersec \
+ --group emotic_pretraining --wandb-project fMRI_Emotion --wandb-entity donghochoi \
+ --epochs 30 --batch-size 52 --lr ${lr} --weight-decay 0.01 --optimizer adamw --scheduler cosine --criterion emotic_SL1 \
+ --task-type emotic --pretrained default --pretraining --image-backbone resnet18 --model-type ${model_type} --data roi --cat-only \
  --best & wait
 
 done
