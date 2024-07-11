@@ -49,6 +49,9 @@ class EmoticTrainer:
             "num_val": self.num_val,
             "seed": self.args.seed,
             "weight_decay": self.args.weight_decay,
+            "pretrained": self.args.pretrained,
+            "pretrained_wgt_path": self.args.wgt_path,
+            "backbone_freeze": self.args.backbone_freeze,
         }
         print("wandb_config:\n", wandb_config)
 

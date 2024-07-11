@@ -57,35 +57,28 @@ def get_args():
     # for predict
     args.add_argument("--best", action="store_true", help="Use best model", default=False)
     
-    # task type: regression
-    reg_args = args.add_argument_group('regression')
+    # Specific to Each Models
+    args.add_argument("--num-classif", type=int, default=3, choices=[3, 5, 10], help="Number of classification type. \n3 for 0~4, 4~7, 7~10, 5 for 0~2, 2~4, 4~6, 6~8, 8~10, \n10 for 10 class clf. similar to regression")
+    args.add_argument("--sampler", action="store_true", help="Use weighted random sampler", default=False)
 
-    # task type: classification
-    classif_args = args.add_argument_group('classification')
-    classif_args.add_argument("--num-classif", type=int, default=3, choices=[3, 5, 10], help="Number of classification type. \n3 for 0~4, 4~7, 7~10, 5 for 0~2, 2~4, 4~6, 6~8, 8~10, \n10 for 10 class clf. similar to regression")
-    classif_args.add_argument("--sampler", action="store_true", help="Use weighted random sampler", default=False)
-
-    # task type: image to VAD
-    img2vad_args = args.add_argument_group('img2vad')
-    img2vad_args.add_argument('--pretrained', type=str, default="None", choices=["None", "default", "EMOTIC"], help='default: pretrained by ImageNet + Places365, EMOTIC: pretrained by EMOTIC dataset')  
-    img2vad_args.add_argument('--backbone-freeze', action='store_true', default=False, help='Freeze pretrained backbone')
+    # Finetuning
+    args.add_argument('--pretrained', type=str, default="None", choices=["None", "default", "EMOTIC"], help='default: pretrained by ImageNet + Places365, EMOTIC: pretrained by EMOTIC dataset')  
+    args.add_argument('--wgt-path', type=str, help="If using EMOTIC pretrained wgt, then make sure to provide pretrained wgt path.")
+    args.add_argument('--backbone-freeze', action='store_true', default=False, help='Freeze pretrained backbone')
     
-    # EMOTIC Reproduce
-    emotic_args = args.add_argument_group('emotic')
-    emotic_args.add_argument("--model-type", type=str, default="BI", choices=["BI", "B", "I", "brain_only"], help="BI: use both body and image") 
-    emotic_args.add_argument("--coco-only", action="store_true", help="Use EMOTIC && COCO dataset", default=False)
-    emotic_args.add_argument("--with-nsd", action="store_true", help="Use NSD dataset given subjects", default=False)
-    emotic_args.add_argument("--pretraining", action="store_true", help="Pretraining with EMOTIC dataset", default=False)
+    # Emotic paper reproduce or Pretraining
+    args.add_argument("--model-type", type=str, default="BI", choices=["BI", "B", "I", "brain_only"], help="BI: use both body and image") 
+    args.add_argument("--coco-only", action="store_true", help="Use EMOTIC && COCO dataset", default=False)
+    args.add_argument("--with-nsd", action="store_true", help="Use NSD dataset given subjects", default=False)
+    args.add_argument("--pretraining", action="store_true", help="Pretraining with EMOTIC dataset", default=False)
 
     # Brain Task
     # use brain3d or roi as guidance to help predicting image => emotic categories
-    emotic_args = args.add_argument_group('brain')
-    emotic_args.add_argument("--image-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50"], help="Image backbone")
-    emotic_args.add_argument("--brain-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50", "mlp1", "mlp2"], help="Brain backbone")
+    args.add_argument("--image-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50"], help="Image backbone")
+    args.add_argument("--brain-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50", "mlp1", "mlp2"], help="Brain backbone")
     # only predict category. Update model, criterion, training, validation, predict 
-    emotic_args.add_argument("--cat-only",  action="store_true", help="predict cat only", default=False)
-    emotic_args.add_argument("--fusion-ver", type=int, default=1, choices=[1, 2, 999], help="1: EMOTIC, 2: bn, 999: one_point")
-
+    args.add_argument("--cat-only",  action="store_true", help="predict cat only", default=False)
+    args.add_argument("--fusion-ver", type=int, default=1, choices=[1, 2, 999], help="1: EMOTIC, 2: bn, 999: one_point")
 
     args = args.parse_args()
 

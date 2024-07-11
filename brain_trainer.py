@@ -62,6 +62,7 @@ class BrainTrainer(EmoticTrainer):
             subjects=self.subjects,
             backbone_freeze=self.args.backbone_freeze,
             pretrained=self.args.pretrained,
+            wgt_path=self.args.wgt_path,
             cat_only=self.args.cat_only,
             fusion_ver=self.args.fusion_ver
         )

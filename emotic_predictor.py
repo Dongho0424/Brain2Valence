@@ -33,9 +33,13 @@ class EmoticPredictor:
             "brain_backbone": self.args.brain_backbone,
             "batch_size": self.args.batch_size,
             "epochs": self.args.epochs,
-            "num_test": self.num_test,
+            "num_train": self.num_train,
+            "num_val": self.num_val,
             "seed": self.args.seed,
             "weight_decay": self.args.weight_decay,
+            "pretrained": self.args.pretrained,
+            "pretrained_wgt_path": self.args.wgt_path,
+            "backbone_freeze": self.args.backbone_freeze,
         }
         print("wandb_config:\n",wandb_config)
         wandb_name = self.args.wandb_name if self.args.wandb_name != None else self.args.model_name

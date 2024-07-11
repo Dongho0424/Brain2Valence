@@ -15,6 +15,7 @@ class BrainModel(nn.Module):
                  brain_data_type: str = 'brain3d',
                  brain_out_feature = 512,
                  pretrained: str = "None",
+                 wgt_path: str = None,
                  backbone_freeze=False,
                  subjects = [1, 2, 5, 7], # for subject specific mlp model
                  cat_only = False,
@@ -29,6 +30,8 @@ class BrainModel(nn.Module):
         self.image_model_type = image_model_type
         assert pretrained in ["None", "default", "EMOTIC"], f"pretrain {pretrained} is not implemented"
         self.pretrain = pretrained
+        if pretrained == "EMOTIC":
+            assert(wgt_path is not None), "wgt_path is required for EMOTIC pretrained model"
 
         ## For Brain
         assert brain_backbone in ["resnet18", "resnet50", "mlp1", "mlp2"], f"backbone {brain_backbone} is not implemented"
@@ -184,9 +187,8 @@ class BrainModel(nn.Module):
             print("Body model: Use pretrained model by EMOTIC dataset")
 
             # The pretrained weights of emotic model using EMOTIC dataset
-            target_model_dir = "/home/dongho/brain2valence/trained_models/Pretrainig_3e-30705_1_excluding_intersec/best_model.pth"
-            print("pretrained weight dir:", target_model_dir)
-            pretrained_weights = torch.load(target_model_dir)
+            print("pretrained weight dir:", wgt_path)
+            pretrained_weights = torch.load(wgt_path)
             # We now want to feed pretrained weights into image_model, fusion network, final layers, excluding brain_model.
             # However, the input sizes of the fusion network are different between brain_model and emotic_model
             # As only the first layer's size is different, only adjusting the first layer of fusion network is needed
