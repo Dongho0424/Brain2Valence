@@ -302,6 +302,7 @@ class EmoticModel(nn.Module):
                  image_backbone: str = "resnet18",
                  image_model_type: str = "BI",
                  pretrained="None",
+                 wgt_path: str = None,
                  backbone_freeze=False,
                  cat_only=False,
                  ):
@@ -311,8 +312,10 @@ class EmoticModel(nn.Module):
         assert image_model_type in ["B", "BI", "I"], f"model type {image_model_type} is not implemented"
         self.model_type = image_model_type
         self.cat_only = cat_only
-        assert pretrained in ["None", "default"], f"pretrain {pretrained} is not implemented"
-        self.pretrain = pretrained
+        assert pretrained in ["None", "default", "EMOTIC"], f"pretrain {pretrained} is not implemented"
+        self.pretrained = pretrained
+        if pretrained == "EMOTIC":
+            assert(wgt_path is not None), "wgt_path is required for EMOTIC pretrained model"
 
         print("#############################")
         print("### Initialize Image2VADModel ###")
@@ -325,23 +328,37 @@ class EmoticModel(nn.Module):
 
             # context model
             model_context = __dict__[self.backbone](num_classes=365)
-            
+            self.context_last_feature = list(model_context.children())[-1].in_features
+
             # body model
             model_body = resnet18()
+            self.body_last_feature = list(model_body.children())[-1].in_features
 
-            if self.pretrain == "None":
+            if self.pretrained == "None":
                 print("Context & Body model: train from scratch")
-            elif self.pretrain == "default": 
+            elif self.pretrained == "default": 
                 # context model
                 context_state_dict = torch.load('/home/dongho/brain2valence/data/places/resnet18_state_dict.pth')
                 model_context.load_state_dict(context_state_dict)
-                self.context_last_feature = list(model_context.children())[-1].in_features
+                
                 self.model_context = nn.Sequential(*list(model_context.children())[:-1])
 
                 # body model
                 model_body = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)   
-                self.body_last_feature = list(model_body.children())[-1].in_features
                 self.model_body = nn.Sequential(*list(model_body.children())[:-1])
+            elif self.pretrained == "EMOTIC":
+                print("Context model: Use pretrained model by EMOTIC dataset")
+                print("Body model: Use pretrained model by EMOTIC dataset")
+
+                # The pretrained weights of emotic model using EMOTIC dataset
+                print("pretrained weight dir:", wgt_path)
+                pretrained_weights = torch.load(wgt_path)
+                
+                # remove last layer
+                self.model_context = nn.Sequential(*list(model_context.children())[:-1])
+                self.model_body = nn.Sequential(*list(model_body.children())[:-1])
+
+                self.load_state_dict(pretrained_weights, strict=False)
             
             # fusion two backbones corresponding to model type
             in_features = 0
@@ -427,8 +444,6 @@ class EmoticModel(nn.Module):
             cat_out = self.fc_cat(fuse_out)
             vad_out = self.fc_vad(fuse_out)
             return cat_out, vad_out
-
-
 
 class Brain2ValenceModel(nn.Module):
     def __init__(self,

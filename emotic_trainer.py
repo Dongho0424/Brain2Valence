@@ -157,6 +157,7 @@ class EmoticTrainer:
             image_backbone=self.args.image_backbone,
             image_model_type=self.args.model_type,
             pretrained=self.args.pretrained,
+            wgt_path=self.args.wgt_path,
             backbone_freeze=self.args.backbone_freeze,
             cat_only=self.args.cat_only
         )
