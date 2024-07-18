@@ -15,6 +15,7 @@ from emotic_trainer import EmoticTrainer
 from model import BrainModel
 import numpy as np
 from sklearn.metrics import mean_squared_error, r2_score, average_precision_score
+import warnings
 
 class BrainTrainer(EmoticTrainer):
     def __init__(self, args):
@@ -162,6 +163,9 @@ class BrainTrainer(EmoticTrainer):
                 wandb.log({"val_loss": val_loss}, step=epoch)
 
                 # evaluation for categorical emotion
+
+                # Filter out the specific UserWarning
+                warnings.filterwarnings("ignore", message="No positive class found in y_true, recall is set to one for all thresholds")
 
                 ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(26)]
                 ap_mean = np.mean(ap_scores)

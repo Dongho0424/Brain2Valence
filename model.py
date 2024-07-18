@@ -34,7 +34,7 @@ class BrainModel(nn.Module):
             assert(wgt_path is not None), "wgt_path is required for EMOTIC pretrained model"
 
         ## For Brain
-        assert brain_backbone in ["resnet18", "resnet50", "mlp1", "mlp2"], f"backbone {brain_backbone} is not implemented"
+        assert brain_backbone in ["resnet18", "resnet50", "mlp1", "mlp2", "mlp3"], f"backbone {brain_backbone} is not implemented"
         self.brain_backbone = brain_backbone
         assert brain_data_type in ["brain3d", "roi"], f"data type {brain_data_type} is not implemented"
         self.brain_data_type = brain_data_type
@@ -98,6 +98,26 @@ class BrainModel(nn.Module):
             features = utils.get_num_voxels(subjects[-1])
             h = 4096
             self.lin0 = nn.Linear(features, h, bias=False)
+            self.mlp = nn.ModuleList([ 
+                nn.Sequential(
+                    nn.LayerNorm(h),
+                    nn.Linear(h, h, bias=False),
+                    nn.GELU(), 
+                    nn.Dropout(0.15),
+                    nn.Linear(h, h, bias=False),
+                ) for _ in range (2)])
+            self.proj = nn.Sequential(
+                nn.Linear(h, 1024, bias=True),
+                nn.LayerNorm(1024),
+                nn.GELU(),
+                nn.Linear(1024, brain_out_feature, bias=True),
+            )
+        elif self.brain_backbone == "mlp3": # using AdaptiveMaxPool1d
+            assert len(subjects) == 1, "mlp3 model is only for subject specific model"
+
+            features = utils.get_num_voxels(subjects[-1])
+            h = 2048
+            self.max_pool = nn.AdaptiveMaxPool1d(h) 
             self.mlp = nn.ModuleList([ 
                 nn.Sequential(
                     nn.LayerNorm(h),
@@ -208,7 +228,7 @@ class BrainModel(nn.Module):
             self.model_body = nn.Sequential(*list(model_body.children())[:-1])
 
             self.load_state_dict(pretrained_weights, strict=False)
-            print(self.state_dict()[first_fusion_layer_key])
+            # print(self.state_dict()[first_fusion_layer_key])
         
         # freeze pretrained parameters
         if backbone_freeze:
@@ -253,6 +273,15 @@ class BrainModel(nn.Module):
                 x_brain += residual   
                 residual = x_brain
             x_brain = self.proj(x_brain) # (B, brain_out_feature)
+        elif self.brain_backbone == "mlp3":
+            x_brain = self.max_pool(x_brain) # adaptive max pool
+            residual = x_brain
+            for block in range(len(self.mlp)):
+                x_brain = self.mlp[block](x_brain)
+                x_brain += residual   
+                residual = x_brain
+            x_brain = self.proj(x_brain) # (B, brain_out_feature)
+        else: raise NotImplementedError(f"backbone {self.brain_backbone} is not implemented")
 
         # for image
         if self.image_model_type == 'B':

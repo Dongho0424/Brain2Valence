@@ -34,13 +34,13 @@ def print_model_info(model):
     print("Model's net structure:")
     print("Model name:", model.__class__.__name__)
     for name, param in model.named_parameters():
-        print(f"Layer: {name}, Type: {type(param.data).__name__}, Parameters: {param.numel()}")
+        # print(f"Layer: {name}, Type: {type(param.data).__name__}, Parameters: {param.numel()}")
         if param.requires_grad:
             total_trainable_params += param.numel()
         else:
             total_nontrainable_params += param.numel()
-    print(f"\nTotal trainable parameters: {total_trainable_params}")
-    print(f"\nTotal Non-trainable parameters: {total_nontrainable_params}")
+    print("\nTotal trainable parameters: {:.3f}M".format(total_trainable_params/1e6))
+    print("\nTotal Non-trainable parameters: {:.3f}M".format(total_nontrainable_params/1e6))
 
 
 def set_seed(args):
