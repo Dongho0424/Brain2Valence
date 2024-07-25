@@ -120,11 +120,10 @@ class BrainModel(nn.Module):
             self.max_pool = nn.AdaptiveMaxPool1d(h) 
             self.mlp = nn.ModuleList([ 
                 nn.Sequential(
-                    nn.LayerNorm(h),
                     nn.Linear(h, h, bias=False),
+                    nn.LayerNorm(h),
                     nn.GELU(), 
                     nn.Dropout(0.15),
-                    nn.Linear(h, h, bias=False),
                 ) for _ in range (2)])
             self.proj = nn.Sequential(
                 nn.Linear(h, 1024, bias=True),
