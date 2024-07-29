@@ -163,6 +163,44 @@
                 "--cat-only",
                 "--fusion-ver", "1"
             ]
-        }
+        },
+        {
+            "name": "Cross_Subj, Pretraining",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/main.py",
+            "args": [
+                "--exec_mode", "train",
+                "--subj", "2","5","7",
+                "--model-name", "1e-4_freeze",
+                "--notes", "_0728_freeze_0",
+                "--group", "cross_subj_pretraining",
+                "--wandb-project", "fMRI_Emotion",
+                "--wandb-entity", "donghochoi",
+                "--epochs", "50",
+                "--batch-size", "52",
+                "--lr", "1e-4",
+                "--weight-decay", "0.01",
+                "--optimizer", "adamw",
+                "--scheduler", "cosine",
+                "--criterion", "emotic_SL1",
+                "--cat-criterion", "softmargin",
+                "--task-type", "cross_subj",
+                "--pretrained", "EMOTIC",
+                "--backbone-freeze",
+                "--image-backbone", "resnet18",
+                "--model-type", "BI",
+                "--brain-backbone", "cross_subj",
+                "--pool-num", "2048",
+                "--data", "roi",
+                "--cat-only",
+                "--fusion-ver", "1",
+                "--wgt-path", "/home/dongho/brain2valence/trained_models/Pretrainig_1e-50705_1_excluding_intersec/best_model.pth"
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "0"
+            },
+            "console": "integratedTerminal"
+        },
     ]
 }

@@ -200,7 +200,7 @@ class EmoticTrainer:
         if self.args.cat_criterion == "emotic":
             disc = DiscreteLoss(weight_type='dynamic', device=self.device)
         elif self.args.cat_criterion == "softmargin":
-            disc = nn.MultiLabelSoftMarginLoss(reduction='sum')
+            disc = nn.MultiLabelSoftMarginLoss(reduction='sum') # logit 을 넣어줘야 한다.
         else: raise NotImplementedError(f'criterion {self.args.cat_criterion} is not implemented')
 
         if self.args.criterion == "emotic_L2":

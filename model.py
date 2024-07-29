@@ -6,6 +6,28 @@ from typing import List
 from monai.networks.nets import resnet
 from resnet import ResNetwClf
 from torchvision.models import resnet18, ResNet18_Weights, resnet50, ResNet50_Weights, __dict__, ResNet
+import random
+
+class ResMLP(nn.Module):
+    def __init__(self, h, n_blocks, dropout=0.15):
+        super().__init__()
+        self.n_blocks = n_blocks
+        self.mlp = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(h, h),
+                nn.LayerNorm(h),
+                nn.GELU(),
+                nn.Dropout(dropout)
+            ) for _ in range(n_blocks)
+        ])
+
+    def forward(self, x):
+        residual = x
+        for res_block in range(self.n_blocks):
+            x = self.mlp[res_block](x)
+            x += residual
+            residual = x
+        return x
 
 class BrainModel(nn.Module):
     def __init__(self,
@@ -13,7 +35,8 @@ class BrainModel(nn.Module):
                  image_model_type: str = "BI",
                  brain_backbone: str = "resnet18",
                  brain_data_type: str = 'brain3d',
-                 brain_out_feature = 512,
+                 brain_in_dim = 2048, # pool_num for cross_subj 
+                 brain_out_dim = 512,
                  pretrained: str = "None",
                  wgt_path: str = None,
                  backbone_freeze=False,
@@ -29,16 +52,17 @@ class BrainModel(nn.Module):
         assert image_model_type in ["B", "BI", "I", "brain_only"], f"model type {image_model_type} is not implemented"
         self.image_model_type = image_model_type
         assert pretrained in ["None", "default", "EMOTIC"], f"pretrain {pretrained} is not implemented"
-        self.pretrain = pretrained
+        self.pretrained = pretrained
         if pretrained == "EMOTIC":
             assert(wgt_path is not None), "wgt_path is required for EMOTIC pretrained model"
 
         ## For Brain
-        assert brain_backbone in ["resnet18", "resnet50", "mlp1", "mlp2", "mlp3"], f"backbone {brain_backbone} is not implemented"
+        assert brain_backbone in ["resnet18", "resnet50", "mlp1", "mlp2", "mlp3", "cross_subj"], f"backbone {brain_backbone} is not implemented"
         self.brain_backbone = brain_backbone
         assert brain_data_type in ["brain3d", "roi"], f"data type {brain_data_type} is not implemented"
         self.brain_data_type = brain_data_type
-
+        self.brain_in_dim = brain_in_dim
+        self.subjects = subjects
         self.cat_only = cat_only
 
         print("#############################")
@@ -69,9 +93,9 @@ class BrainModel(nn.Module):
             
         ## Brain Model ##
         if self.brain_backbone == "resnet18":
-            self.res_model = ResNetwClf(backbone_type='resnet_18', num_classes=brain_out_feature)
+            self.res_model = ResNetwClf(backbone_type='resnet_18', num_classes=brain_out_dim)
         elif self.brain_backbone == "resnet50":
-            self.res_model = ResNetwClf(backbone_type='resnet_50', num_classes=brain_out_feature)
+            self.res_model = ResNetwClf(backbone_type='resnet_50', num_classes=brain_out_dim)
         elif self.brain_backbone == "mlp1":
             assert len(subjects) == 1, "mlp model is only for subject specific model"
 
@@ -90,7 +114,7 @@ class BrainModel(nn.Module):
                     nn.GELU(), 
                     nn.Dropout(0.15)
                 ) for _ in range (4)])
-            self.proj = nn.Linear(h, brain_out_feature, bias=True)
+            self.proj = nn.Linear(h, brain_out_dim, bias=True)
 
         elif self.brain_backbone == "mlp2": # lightweight version of "mlp1"
             assert len(subjects) == 1, "mlp2 model is only for subject specific model"
@@ -110,7 +134,7 @@ class BrainModel(nn.Module):
                 nn.Linear(h, 1024, bias=True),
                 nn.LayerNorm(1024),
                 nn.GELU(),
-                nn.Linear(1024, brain_out_feature, bias=True),
+                nn.Linear(1024, brain_out_dim, bias=True),
             )
         elif self.brain_backbone == "mlp3": # using AdaptiveMaxPool1d
             assert len(subjects) == 1, "mlp3 model is only for subject specific model"
@@ -129,45 +153,69 @@ class BrainModel(nn.Module):
                 nn.Linear(h, 1024, bias=True),
                 nn.LayerNorm(1024),
                 nn.GELU(),
-                nn.Linear(1024, brain_out_feature, bias=True),
+                nn.Linear(1024, brain_out_dim, bias=True),
             )
+        elif self.brain_backbone == "cross_subj":
+            assert len(subjects) > 1, "cross_subj model is only for cross_subject model"
+            # We assume that the number of voxels is adaptively max pooled to brain_in_dim (2048)
+            # before feeding into the model 
+            
+            # MindBridge-like embedder and builder
+            h = brain_in_dim
+            self.embedder = nn.ModuleDict({
+                str(subj): nn.Sequential( 
+                    ResMLP(h, 2),
+                    nn.Linear(h, brain_out_dim, bias=True),
+                    nn.LayerNorm(brain_out_dim),
+                    nn.GELU(),
+                ) for subj in subjects
+            })
+            self.builder = nn.ModuleDict({
+                str(subj): nn.Sequential( 
+                    nn.Linear(brain_out_dim, h, bias=True),
+                    nn.LayerNorm(h),
+                    nn.GELU(),
+                    ResMLP(h, 2)
+                )
+                for subj in subjects
+            })
 
         ## fusion model ##
         # three backbones corresponding to model type
-        fuse_in_features = 0
-        if self.image_model_type == "B": fuse_in_features = self.body_last_feature
-        elif self.image_model_type == "I": fuse_in_features = self.context_last_feature
-        elif self.image_model_type == "BI": fuse_in_features = self.context_last_feature + self.body_last_feature
-        elif self.image_model_type == "brain_only": fuse_in_features = 0
+        fuse_in_dim = 0
+        if self.image_model_type == "B": fuse_in_dim = self.body_last_feature
+        elif self.image_model_type == "I": fuse_in_dim = self.context_last_feature
+        elif self.image_model_type == "BI": fuse_in_dim = self.context_last_feature + self.body_last_feature
+        elif self.image_model_type == "brain_only": fuse_in_dim = 0
         else: raise NotImplementedError(f"model type {image_model_type} is not implemented")
 
-        fuse_in_features += brain_out_feature # 512 or 1024 or 1536
-        fuse_out_features = 256
+        fuse_in_dim += brain_out_dim # 512 or 1024 or 1536
+        fuse_out_dim = 256
 
         if fusion_ver == 1: # EMOTIC paper ver.
             self.model_fusion = nn.Sequential(
-                nn.Linear(fuse_in_features, fuse_out_features),
-                nn.BatchNorm1d(fuse_out_features),
+                nn.Linear(fuse_in_dim, fuse_out_dim),
+                nn.BatchNorm1d(fuse_out_dim),
                 nn.ReLU(),
                 nn.Dropout(p=0.5)
             )
         elif fusion_ver == 2:
             self.model_fusion = nn.Sequential(
-                nn.Linear(fuse_in_features, fuse_in_features),
-                nn.BatchNorm1d(fuse_in_features),
+                nn.Linear(fuse_in_dim, fuse_in_dim),
+                nn.BatchNorm1d(fuse_in_dim),
                 nn.GELU(),
-                nn.Linear(fuse_in_features, fuse_in_features),
-                nn.BatchNorm1d(fuse_in_features),
+                nn.Linear(fuse_in_dim, fuse_in_dim),
+                nn.BatchNorm1d(fuse_in_dim),
                 nn.GELU(),
-                nn.Linear(fuse_in_features, fuse_in_features),
-                nn.BatchNorm1d(fuse_in_features),
+                nn.Linear(fuse_in_dim, fuse_in_dim),
+                nn.BatchNorm1d(fuse_in_dim),
                 nn.GELU(),
-                nn.Linear(fuse_in_features, fuse_out_features),
+                nn.Linear(fuse_in_dim, fuse_out_dim),
             )
         elif fusion_ver == 999: # Replace BatchNorm to LayerNorm
             self.model_fusion = nn.Sequential(
-                nn.Linear(fuse_in_features, fuse_out_features),
-                nn.LayerNorm(fuse_out_features),
+                nn.Linear(fuse_in_dim, fuse_out_dim),
+                nn.LayerNorm(fuse_out_dim),
                 nn.ReLU(),
                 nn.Dropout(p=0.5)
             )
@@ -175,19 +223,19 @@ class BrainModel(nn.Module):
 
         ## Final Layers ##
         if self.cat_only:
-            self.fc_cat = nn.Linear(fuse_out_features, 26)
+            self.fc_cat = nn.Linear(fuse_out_dim, 26)
         else:
-            self.fc_cat = nn.Linear(fuse_out_features, 26)
-            self.fc_vad = nn.Linear(fuse_out_features, 3)
+            self.fc_cat = nn.Linear(fuse_out_dim, 26)
+            self.fc_vad = nn.Linear(fuse_out_dim, 3)
 
         ## Using Pretrained Weights ## 
-        if self.pretrain == "None":
+        if self.pretrained == "None":
             print("Context & Body model: train from scratch")
             # remove last layer
             self.model_context = nn.Sequential(*list(model_context.children())[:-1])
             self.model_body = nn.Sequential(*list(model_body.children())[:-1])
 
-        elif self.pretrain == "default": 
+        elif self.pretrained == "default": 
             # context model pretrained by Places365 dataset
             print("Context model: Use pretrained model by Places365 dataset")
             context_state_dict = torch.load('/home/dongho/brain2valence/data/places/resnet18_state_dict.pth')
@@ -200,7 +248,7 @@ class BrainModel(nn.Module):
             self.model_context = nn.Sequential(*list(model_context.children())[:-1])
             self.model_body = nn.Sequential(*list(model_body.children())[:-1])
 
-        elif self.pretrain == "EMOTIC":
+        elif self.pretrained == "EMOTIC":
             assert fusion_ver == 1, "EMOTIC pretrained model is only available for fusion_ver=1"
             print("Context model: Use pretrained model by EMOTIC dataset")
             print("Body model: Use pretrained model by EMOTIC dataset")
@@ -218,7 +266,8 @@ class BrainModel(nn.Module):
             # 1536 * 256 weight; upper 1024 * 256 is fed pretrained, lower 512 * 256 is zero initialized
             # But the weight of FFN in Sequential() is transposed.
             # Therefore, according to weight size 256 * 1536, left 256 * 1024 is fed pretrained, right 256 * 512 is zero initialized
-            new_weight = torch.cat([prev_weight, torch.zeros(256, 512)], dim=1)
+            # new_weight = torch.cat([prev_weight, torch.zeros(256, 512)], dim=1)
+            new_weight = torch.cat([prev_weight, torch.zeros(fuse_out_dim, brain_out_dim)], dim=1)
 
             pretrained_weights[first_fusion_layer_key] = new_weight
 
@@ -228,6 +277,16 @@ class BrainModel(nn.Module):
 
             self.load_state_dict(pretrained_weights, strict=False)
             # print(self.state_dict()[first_fusion_layer_key])
+        elif self.pretrained == "cross_subj":
+            assert brain_data_type == "roi", "cross_subj is only available for roi data type" 
+            print("Img Context model: Use pretrained model by EMOTIC dataset")
+            print("Img Body model: Use pretrained model by EMOTIC dataset")
+            print("brain model + fusion net(for ROI data): Use pretrained model by other subjects")
+
+            print("pretrained weight dir:", wgt_path)
+            # Use pretrained weight to image model and fusion net
+            pretrained_weights = torch.load(wgt_path)
+            self.load_state_dict(pretrained_weights, strict=False)
         
         # freeze pretrained parameters
         if backbone_freeze:
@@ -239,11 +298,19 @@ class BrainModel(nn.Module):
     def forward(self, 
                 x_body: torch.Tensor = None,
                 x_context: torch.Tensor = None,
-                x_brain: torch.Tensor = None):
+                x_brain: torch.Tensor = None,
+                subj_list = None, # for cross_subj, 
+                ):
         """
         - x_context: (B, 3, 224, 224), 
         - x_body: (B, 3, 112, 112)
         - x_brain: brain3d or roi
+        - subj_list: list of subj
+            - different from self.subjects, which is used for initializing embedder and builder
+            - this subj_list is used for finetuning
+        - if cross-sujb; 
+            - pretraining: (4 * B, ...)
+            - adapting: (2 * B, ...)
         - out: (B, 26), (B, 3)
             - 26 for emotion categories
             - 3 for vad
@@ -280,6 +347,38 @@ class BrainModel(nn.Module):
                 x_brain += residual   
                 residual = x_brain
             x_brain = self.proj(x_brain) # (B, brain_out_feature)
+        elif self.brain_backbone == "cross_subj": 
+            assert x_brain.shape[1] == self.brain_in_dim, f"We assume that # voxels is adaptively max pooled to {self.brain_in_dim}"
+            # pretraining: self.subjects == subj_list
+            # adapting(fine-tuning): self.subjects != subj_list
+            # then subj_list is used for forward
+            assert subj_list is not None, "subj_list is required for cross_subj"
+            
+            x_subj_list = torch.chunk(x_brain, len(subj_list), dim=0) # each element: (B, 2048)
+            x = []
+            x_rec = []
+            if self.pretrained == 'cross_subj': # choose subj_a (source subject) and subj_b (target subject)
+                subj_a, subj_b = subj_list[0], subj_list[-1]
+            else: # random sample 2 subjects
+                subj_a, subj_b = random.sample(subj_list, 2) 
+
+            for i, subj_i in enumerate(subj_list): # [2, 5, 7(src), 1(tgt)]
+ 
+                x_i = self.embedder[str(subj_i)](x_subj_list[i]) # subj_i semantic embedding by embedder
+                
+                if subj_i == subj_a: 
+                    x_a = x_i                # subj_a seman embedding are choosen
+                x.append(x_i)
+
+                x_i_rec = self.builder[str(subj_i)](x_i) # subj_i recon brain signals by builder
+                x_rec.append(x_i_rec)
+
+            x_brain = torch.concat(x, dim=0) # (4 * B, brain_out_dim)
+            x_rec = torch.concat(x_rec, dim=0) # (4 * B, brain_out_dim)
+
+            # forward cycling
+            x_b = self.builder[str(subj_b)](x_a)  # subj_b recon brain signal using subj_a seman embedding
+            x_b = self.embedder[str(subj_b)](x_b) # subj_b semantic embedding (pseudo)
         else: raise NotImplementedError(f"backbone {self.brain_backbone} is not implemented")
 
         # for image
@@ -315,7 +414,10 @@ class BrainModel(nn.Module):
                 x_brain = x_brain.unsqueeze(0)
             fuse_out = self.model_fusion(x_brain)
 
-        if self.cat_only:
+        if self.brain_backbone == 'cross_subj':
+            cat_out = self.fc_cat(fuse_out)
+            return cat_out, x_rec, x_a, x_b
+        elif self.cat_only:
             # return logit
             cat_out = self.fc_cat(fuse_out)
             return cat_out

@@ -318,7 +318,7 @@ class BrainDataset(Dataset):
         self.body_transform = body_transform
         self.normalize = normalize
 
-        print("Pulling Emotic + COCO + NSD Brain data...")
+        print(f"Pulling Emotic + COCO + NSD Brain data given split: {split}, subjects: {subjects}")
         emotic_data = utils.get_emotic_df(is_split=False)
         self.metadata = utils.get_emotic_coco_nsd_df(emotic_data=emotic_data, 
                                                      split=split, 

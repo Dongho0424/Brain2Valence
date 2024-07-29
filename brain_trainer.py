@@ -25,7 +25,8 @@ class BrainTrainer(EmoticTrainer):
 
         print('Prepping train and validation dataloaders...')
 
-        self.subjects = [1, 2, 5, 7] if self.args.all_subjects else [self.args.subj]
+        # self.subjects = [1, 2, 5, 7] if self.args.all_subjects else [self.args.subj]
+        self.subjects = [1, 2, 5, 7] if self.args.all_subjects else self.args.subj
 
         train_context_transform, train_body_transform, test_context_transform, test_body_transform =\
             utils.get_transforms_emotic()

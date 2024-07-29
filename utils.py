@@ -16,17 +16,6 @@ from torch.utils.data.sampler import WeightedRandomSampler
 from torchvision.transforms import v2
 from sklearn.model_selection import train_test_split
 
-
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-# TODO: label 수를 낮춰서 negative, neutral, positive 감정 label로 다운시키고, 그것을 classification 하는 task도 생각할 수 있겠다.
-# TODO: brain을 다 쓰지 말고, 감정에 잘 반응하는 특정 ROI가 있다.
-# TODO: NSD -> 3T로 넘어 가는게 허들. 3T에서 처리를 잘 할 수 있는 디코더를 만들어야 함. 유의미하다. whole brain을 잘 해야하낟.
-# 스피치, 동영상에서도 디코딩을 잘 해내야하는 것.
-# Question: NSD dataset의 사진을 보고, 우리가 크게 3개의 감정을 나눠서 분류하는 classificaiton task를 할 수 있을까?
-# - 아무튼 NSD의 사진을 보고 image 감정 라벨링을 우리가 하는 것이지.
-# TODO: Emoset dataset의 여러 감정 노테이션을 크게 3개의 감정으로 나눠서 그것을 분류하는 classification task를 할 수 있을까?
-
-
 def print_model_info(model):
     total_trainable_params = 0
     total_nontrainable_params = 0
@@ -42,7 +31,6 @@ def print_model_info(model):
     print("\nTotal trainable parameters: {:.3f}M".format(total_trainable_params/1e6))
     print("\nTotal Non-trainable parameters: {:.3f}M".format(total_nontrainable_params/1e6))
 
-
 def set_seed(args):
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
@@ -51,21 +39,6 @@ def set_seed(args):
     torch.backends.cudnn.deterministic = True
     np.random.seed(args.seed)
     random.seed(args.seed)
-
-
-def seed_everything(seed=0, cudnn_deterministic=True):
-    random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    if cudnn_deterministic:
-        torch.backends.cudnn.deterministic = True
-    else:
-        # needs to be False to use conv3D
-        print('Note: not using cudnn.deterministic')
-
 
 def get_emotic_data() -> dict:
     """
