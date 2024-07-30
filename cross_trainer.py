@@ -94,10 +94,8 @@ class BaseTrainer:
                                    normalize=True,
                                    )
 
-        train_dl = DataLoader(
-            train_dataset, batch_size=self.args.batch_size, shuffle=True)
-        val_dl = DataLoader(
-            val_dataset, batch_size=self.args.batch_size, shuffle=False)
+        train_dl = DataLoader(train_dataset, batch_size=self.args.batch_size, shuffle=True)
+        val_dl = DataLoader(val_dataset, batch_size=self.args.batch_size, shuffle=False)
 
         return train_dl, val_dl, len(train_dataset), len(val_dataset)
 
@@ -105,9 +103,23 @@ class BaseTrainer:
     def prepare_dataloader(self):
         pass
 
-    @abstractmethod
     def get_model(self):
-        pass
+        model = BrainModel(
+            image_backbone=self.args.image_backbone,
+            image_model_type=self.args.model_type,
+            brain_backbone=self.args.brain_backbone,
+            brain_data_type=self.args.data,
+            brain_in_dim=self.args.pool_num,
+            brain_out_dim=512,
+            subjects=self.subjects,
+            backbone_freeze=self.args.backbone_freeze,
+            pretrained=self.args.pretrained,
+            wgt_path=self.args.wgt_path,
+            cat_only=self.args.cat_only,
+            fusion_ver=self.args.fusion_ver
+        )
+        utils.print_model_info(model)
+        self.model = model
 
     def get_criterion(self):
         if self.args.cat_criterion == "emotic":
@@ -168,16 +180,21 @@ class BaseTrainer:
             )
         return scheduler
 
-    def step(self, voxel, ctx_img, body_img, vad, gt_cat):
+    def step(self, voxel, ctx_img, body_img, vad, cat):
+        # to device
+        ctx_img = ctx_img.to(self.device, torch.float)
+        body_img = body_img.to(self.device, torch.float)
+        cat = cat.to(self.device, torch.float)
+        vad = vad.to(self.device, torch.float)
+        voxel = voxel.to(self.device, torch.float)
+
         pred_cat, voxel_rec, voxel_a, voxel_b = self.model(body_img, ctx_img, voxel, self.subjects)
 
-        cat_loss = self.cat_loss(pred_cat, gt_cat)
+        cat_loss = self.cat_loss(pred_cat, cat)
         recon_loss = self.recon_loss(voxel_rec, voxel)
         cycle_loss = self.cycle_loss(voxel_a, voxel_b)
 
-        loss = cat_loss + recon_loss + cycle_loss
-
-        return loss, pred_cat
+        return cat_loss, recon_loss, cycle_loss, pred_cat
 
     @abstractmethod
     def train_epoch(self, epoch):
@@ -193,7 +210,7 @@ class BaseTrainer:
         print("#### enter Training ####")
 
         best_val_loss = float("inf")
-        best_val_ap_mean = -float("inf")
+        best_val_mAP = -float("inf")
 
         # Filter out the specific UserWarning
         warnings.filterwarnings(
@@ -201,18 +218,24 @@ class BaseTrainer:
 
         for epoch in range(self.args.epochs):
             ## Train ##
-            train_loss = self.train_epoch(epoch)
+            train_loss, train_cat_loss, train_rec_loss, train_cyc_loss = self.train_epoch(epoch)
 
             ## Eval ##
-            val_loss, val_ap_mean = self.eval_epoch(epoch)
+            val_loss, val_cat_loss, val_rec_loss, val_cyc_loss, val_mAP = self.eval_epoch(epoch)
 
             ## Wandb Log & save models ##
             if self.args.wandb_log:
                 wandb.log(
                     {"train/loss": train_loss,
+                     "train/cat_loss": train_cat_loss,
+                     "train/rec_loss": train_rec_loss,
+                     "train/cyc_loss": train_cyc_loss,
                      "lr": self.optimizer.param_groups[0]['lr'],
                      "val/loss": val_loss,
-                     "val_AP_mean": val_ap_mean}, step=epoch)
+                     "val/cat_loss": val_cat_loss,
+                     "val/rec_loss": val_rec_loss,
+                     "val/cyc_loss": val_cyc_loss,
+                     "val/mAP": val_mAP}, step=epoch)
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
@@ -221,15 +244,14 @@ class BaseTrainer:
                     wandb.log({"best_val_loss": best_val_loss}, step=epoch)
                 self.save_model(self.args, self.model, best=True)
 
-            if val_ap_mean > best_val_ap_mean:
-                best_val_ap_mean = val_ap_mean
+            if val_mAP > best_val_mAP:
+                best_val_mAP = val_mAP
                 if self.args.wandb_log:
-                    wandb.log({"best_val_AP_mean": val_ap_mean}, step=epoch)
+                    wandb.log({"best_val_mAP": val_mAP}, step=epoch)
 
             self.scheduler.step()
 
-            print("Epoch: {}, Train Loss: {:.4f}, Val Loss: {:.4f}".format(
-                epoch, train_loss, val_loss))
+            print("Epoch: {}, Train Loss: {:.4f}, Val Loss: {:.4f}".format(epoch, train_loss, val_loss))
 
         self.save_model(self.args, self.model, best=False)
 
@@ -241,12 +263,9 @@ class BaseTrainer:
 
         model.cpu()
         if best:
-            torch.save(model.state_dict(), os.path.join(
-                save_dir, "best_model.pth"))
+            torch.save(model.state_dict(), os.path.join(save_dir, "best_model.pth"))
         else:
-            torch.save(model.state_dict(), os.path.join(
-                save_dir, "last_model.pth"))
-
+            torch.save(model.state_dict(), os.path.join(save_dir, "last_model.pth"))
 
 class CrossTrainer(BaseTrainer):
     def __init__(self, args):
@@ -278,29 +297,14 @@ class CrossTrainer(BaseTrainer):
         self.num_train = num_train_total
         self.num_val = num_val_total
 
-    def get_model(self):
-        model = BrainModel(
-            image_backbone=self.args.image_backbone,
-            image_model_type=self.args.model_type,
-            brain_backbone=self.args.brain_backbone,
-            brain_data_type=self.args.data,
-            brain_in_dim=self.args.pool_num,
-            brain_out_dim=512,
-            subjects=self.subjects,
-            backbone_freeze=self.args.backbone_freeze,
-            pretrained=self.args.pretrained,
-            wgt_path=self.args.wgt_path,
-            cat_only=self.args.cat_only,
-            fusion_ver=self.args.fusion_ver
-        )
-        utils.print_model_info(model)
-        self.model = model
-
     def train_epoch(self, epoch):
         self.model.to(device=self.device)
         self.model.train()
 
         train_loss = 0.
+        train_cat_loss = 0.
+        train_rec_loss = 0.
+        train_cyc_loss = 0.
         for train_i, data in tqdm(enumerate(zip(*self.train_dls))):
             # repeat_index = train_i % 3 # randomly choose the one in the repeated three
             # TODO: 이미지 하나 당 brain_data가 3개씩인데,
@@ -309,15 +313,9 @@ class CrossTrainer(BaseTrainer):
             voxel_list, ctx_img_list, body_img_list, vad_list, cat_list = [], [], [], [], []
             for ctx_img, body_img, v, a, d, cat, voxel in data:
                 vad = torch.stack([v, a, d], dim=1)
-                # to device
-                ctx_img = ctx_img.to(self.device, torch.float)
-                body_img = body_img.to(self.device, torch.float)
-                cat = cat.to(self.device, torch.float)
-                vad = vad.to(self.device, torch.float)
-                voxel = voxel.to(self.device, torch.float)
 
                 # adaptive max pool
-                voxel = F.adaptive_max_pool1d(voxel, self.args.pool_num)
+                voxel = F.adaptive_max_pool1d(voxel.float(), self.args.pool_num)
 
                 voxel_list.append(voxel)
                 ctx_img_list.append(ctx_img)
@@ -330,22 +328,27 @@ class CrossTrainer(BaseTrainer):
             vad = torch.cat(vad_list, dim=0)
             cat = torch.cat(cat_list, dim=0)
 
-            loss, _ = self.step(voxel, ctx_img, body_img, vad, cat)
+            cat_loss, rec_loss, cyc_loss, _ = self.step(voxel, ctx_img, body_img, vad, cat)
+            loss = cat_loss + self.args.rec_mult * rec_loss + self.args.cyc_mult * cyc_loss
 
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
 
             train_loss += loss.item()
+            train_cat_loss += cat_loss.item()
+            train_rec_loss += rec_loss.item()
+            train_cyc_loss += cyc_loss.item()
 
-        # train_loss /= self.num_train
-
-        return train_loss
+        return train_loss, train_cat_loss, train_rec_loss, train_cyc_loss
 
     def eval_epoch(self, epoch):
         self.model.eval()
 
         val_loss = 0.
+        val_cat_loss = 0.
+        val_rec_loss = 0.
+        val_cyc_loss = 0.
         pred_cats = np.zeros((self.args.batch_size, 26))
         gt_cats = np.zeros((self.args.batch_size, 26))
         with torch.no_grad():
@@ -358,14 +361,7 @@ class CrossTrainer(BaseTrainer):
                 for ctx_img, body_img, v, a, d, cat, voxel in data:
                     vad = torch.stack([v, a, d], dim=1)
 
-                    # to device
-                    ctx_img = ctx_img.to(self.device, torch.float)
-                    body_img = body_img.to(self.device, torch.float)
-                    cat = cat.to(self.device, torch.float)
-                    vad = vad.to(self.device, torch.float)
-                    voxel = voxel.to(self.device, torch.float)
-
-                    voxel = F.adaptive_max_pool1d(voxel, self.args.pool_num)
+                    voxel = F.adaptive_max_pool1d(voxel.float(), self.args.pool_num)
 
                     voxel_list.append(voxel)
                     ctx_img_list.append(ctx_img)
@@ -378,17 +374,144 @@ class CrossTrainer(BaseTrainer):
                 vad = torch.cat(vad_list, dim=0)
                 gt_cat = torch.cat(cat_list, dim=0)
 
-                loss, pred_cat = self.step(voxel, ctx_img, body_img, vad, gt_cat)
+                cat_loss, rec_loss, cyc_loss, pred_cat = self.step(voxel, ctx_img, body_img, vad, gt_cat)
+                loss = cat_loss + self.args.rec_mult * rec_loss + self.args.cyc_mult * cyc_loss
                 val_loss += loss.item()
+                val_cat_loss += cat_loss.item()
+                val_rec_loss += rec_loss.item()
+                val_cyc_loss += cyc_loss.item()
 
                 pred_cats = np.vstack((pred_cats, pred_cat.cpu().numpy())) if not np.all(
                     pred_cats == 0) else pred_cat.cpu().numpy()
                 gt_cats = np.vstack((gt_cats, gt_cat.cpu().numpy())) if not np.all(
                     gt_cats == 0) else gt_cat.cpu().numpy()
 
-        # val_loss /= self.num_val
-        ap_scores = [average_precision_score(
-            gt_cats[:, i], pred_cats[:, i]) for i in range(26)]
+        ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(26)]
+        val_ap_mean = np.mean(ap_scores)
+
+        return val_loss, val_cat_loss, val_rec_loss, val_cyc_loss, val_ap_mean
+
+class CrossAdapter(BaseTrainer):
+    """
+    Finetuning for cross-subject training
+    """
+    def __init__(self, args):
+        super().__init__(args)
+
+    def prepare_dataloader(self):
+
+        print('Prepping multi-subject train and validation dataloaders...')
+
+        self.subjects = self.args.subj_src + [self.args.subj_tgt]
+        print("Subjects used when pretraing:", self.args.subj_src)
+        print("Subjects used when finetuning:", self.args.subj_tgt)
+
+        # dl for src
+        train_dls_src = []
+        val_dls_src = []
+        for subj in self.subjects:
+            train_dl, val_dl, _, _ = self.get_single_dl(subj)
+            train_dls_src.append(train_dl)
+            val_dls_src.append(val_dl)
+
+        self.train_dls_src = train_dls_src
+        self.val_dls_src = val_dls_src
+
+        # dl for tgt
+        self.train_dl_tgt, self.val_dl_tgt, self.num_train, self.num_val = \
+            self.get_single_dl(self.args.subj_tgt)
+
+        print('# train data:', self.num_train)
+        print('# val data:', self.num_val)
+
+    def train_epoch(self, epoch):
+        self.model.to(device=self.device)
+        self.model.train()
+
+        train_loss = 0.
+
+        # enable iteratable
+        train_dls_src_iter = []
+        for train_dl_s in self.train_dls_src:
+            train_dls_src_iter.append(iter(train_dl_s))
+
+        for train_i, data_tgt in tqdm(enumerate(self.train_dl_tgt)):
+            
+            # target single data
+            ctx_img, body_img, v, a, d, cat, voxel = data_tgt
+            vad = torch.stack([v, a, d], dim=1)
+
+            voxel = F.adaptive_max_pool1d(voxel.float(), self.args.pool_num)
+
+            # source single data
+            src_idx = train_i % len(train_dls_src_iter) # every time choose one src domain
+            ctx_img_src, body_img_src, v_src, a_src, d_src, cat_src, voxel_src = next(train_dls_src_iter[src_idx])
+            vad_src = torch.stack([v_src, a_src, d_src], dim=1)
+
+            voxel_src = F.adaptive_max_pool1d(voxel_src.float(), self.args.pool_num)
+
+            # concat and feed into model
+            # [source, target], must in order
+            voxel = torch.cat([voxel_src, voxel], dim=0)
+            ctx_img = torch.cat([ctx_img_src, ctx_img], dim=0)
+            body_img = torch.cat([body_img_src, body_img], dim=0)
+            vad = torch.cat([vad_src, vad], dim=0)
+            cat = torch.cat([cat_src, cat], dim=0)
+
+            loss, _ = self.step(voxel, ctx_img, body_img, vad, cat)
+
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+            train_loss += loss.item()
+
+        return train_loss
+
+    def eval_epoch(self, epoch):
+        self.model.eval()
+
+        val_loss = 0.
+        pred_cats = np.zeros((self.args.batch_size, 26))
+        gt_cats = np.zeros((self.args.batch_size, 26))
+
+        # enable iteratable
+        val_dls_src_iter = []
+        for val_dl_s in self.val_dls_src:
+            val_dls_src_iter.append(iter(val_dl_s))
+        with torch.no_grad():
+            for val_i, data_tgt in tqdm(enumerate(zip(*self.val_dls))): 
+                # target single data
+                ctx_img, body_img, v, a, d, cat, voxel = data_tgt
+                vad = torch.stack([v, a, d], dim=1)
+
+                voxel = F.adaptive_max_pool1d(voxel.float(), self.args.pool_num)
+
+                # source single data
+                src_idx = val_i % len(val_dls_src_iter) # every time choose one src domain
+                ctx_img_src, body_img_src, v_src, a_src, d_src, cat_src, voxel_src = next(val_dls_src_iter[src_idx])
+                vad_src = torch.stack([v_src, a_src, d_src], dim=1)
+
+                voxel_src = F.adaptive_max_pool1d(voxel_src.float(), self.args.pool_num)
+
+                # concat and feed into model
+                # [source, target], must in order
+                voxel = torch.cat([voxel_src, voxel], dim=0)
+                ctx_img = torch.cat([ctx_img_src, ctx_img], dim=0)
+                body_img = torch.cat([body_img_src, body_img], dim=0)
+                vad = torch.cat([vad_src, vad], dim=0)
+                gt_cat = torch.cat([cat_src, cat], dim=0)
+
+                loss, pred_cat = self.step(voxel, ctx_img, body_img, vad, gt_cat)
+                val_loss += loss.item()
+                # TODO: MindBridge 논문대로 코드를 짰지만, 걸리는 것은 finetuning 임에도 불구하고
+                # source data의 cat과 target data의 cat을 같이 넣은 후, pred_cat을 받아 loss를 계산하는 것이다. 
+                pred_cats = np.vstack((pred_cats, pred_cat.cpu().numpy())) if not np.all(
+                    pred_cats == 0) else pred_cat.cpu().numpy()
+                gt_cats = np.vstack((gt_cats, gt_cat.cpu().numpy())) if not np.all(
+                    gt_cats == 0) else gt_cat.cpu().numpy()
+
+        ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(26)]
         val_ap_mean = np.mean(ap_scores)
 
         return val_loss, val_ap_mean
