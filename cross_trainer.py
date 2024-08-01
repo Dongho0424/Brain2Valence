@@ -43,21 +43,7 @@ class BaseTrainer:
         model_name = self.args.model_name
         print(f"wandb {wandb_project} run {model_name}")
         wandb.login(host='https://api.wandb.ai')
-        wandb_config = {
-            "model_name": self.args.model_name,
-            "subject": str(self.subjects),
-            "image_backbone": self.args.image_backbone,
-            "brain_backbone": self.args.brain_backbone,
-            "batch_size": self.args.batch_size,
-            "epochs": self.args.epochs,
-            "num_train": self.num_train,
-            "num_val": self.num_val,
-            "seed": self.args.seed,
-            "weight_decay": self.args.weight_decay,
-            "pretrained": self.args.pretrained,
-            "pretrained_wgt_path": self.args.wgt_path,
-            "backbone_freeze": self.args.backbone_freeze,
-        }
+        wandb_config = vars(self.args)
         print("wandb_config:\n", wandb_config)
 
         wandb_name = self.args.wandb_name if self.args.wandb_name != None else self.args.model_name
@@ -402,7 +388,7 @@ class CrossAdapter(BaseTrainer):
 
         print('Prepping multi-subject train and validation dataloaders...')
 
-        self.subjects = self.args.subj_src + [self.args.subj_tgt]
+        self.subjects = self.args.subj_src + self.args.subj_tgt
         print("Subjects used when pretraing:", self.args.subj_src)
         print("Subjects used when finetuning:", self.args.subj_tgt)
 
@@ -419,7 +405,7 @@ class CrossAdapter(BaseTrainer):
 
         # dl for tgt
         self.train_dl_tgt, self.val_dl_tgt, self.num_train, self.num_val = \
-            self.get_single_dl(self.args.subj_tgt)
+            self.get_single_dl(self.args.subj_tgt[0])
 
         print('# train data:', self.num_train)
         print('# val data:', self.num_val)
@@ -429,6 +415,9 @@ class CrossAdapter(BaseTrainer):
         self.model.train()
 
         train_loss = 0.
+        train_cat_loss = 0.
+        train_rec_loss = 0.
+        train_cyc_loss = 0.
 
         # enable iteratable
         train_dls_src_iter = []
@@ -458,20 +447,27 @@ class CrossAdapter(BaseTrainer):
             vad = torch.cat([vad_src, vad], dim=0)
             cat = torch.cat([cat_src, cat], dim=0)
 
-            loss, _ = self.step(voxel, ctx_img, body_img, vad, cat)
+            cat_loss, rec_loss, cyc_loss, _ = self.step(voxel, ctx_img, body_img, vad, cat)
+            loss = cat_loss + self.args.rec_mult * rec_loss + self.args.cyc_mult * cyc_loss
 
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
 
             train_loss += loss.item()
+            train_cat_loss += cat_loss.item()
+            train_rec_loss += rec_loss.item()
+            train_cyc_loss += cyc_loss.item()
 
-        return train_loss
+        return train_loss, train_cat_loss, train_rec_loss, train_cyc_loss
 
     def eval_epoch(self, epoch):
         self.model.eval()
 
         val_loss = 0.
+        val_cat_loss = 0.
+        val_rec_loss = 0.
+        val_cyc_loss = 0.
         pred_cats = np.zeros((self.args.batch_size, 26))
         gt_cats = np.zeros((self.args.batch_size, 26))
 
@@ -480,7 +476,7 @@ class CrossAdapter(BaseTrainer):
         for val_dl_s in self.val_dls_src:
             val_dls_src_iter.append(iter(val_dl_s))
         with torch.no_grad():
-            for val_i, data_tgt in tqdm(enumerate(zip(*self.val_dls))): 
+            for val_i, data_tgt in tqdm(enumerate(self.val_dl_tgt)): 
                 # target single data
                 ctx_img, body_img, v, a, d, cat, voxel = data_tgt
                 vad = torch.stack([v, a, d], dim=1)
@@ -502,8 +498,13 @@ class CrossAdapter(BaseTrainer):
                 vad = torch.cat([vad_src, vad], dim=0)
                 gt_cat = torch.cat([cat_src, cat], dim=0)
 
-                loss, pred_cat = self.step(voxel, ctx_img, body_img, vad, gt_cat)
+                cat_loss, rec_loss, cyc_loss, pred_cat = self.step(voxel, ctx_img, body_img, vad, gt_cat)
+                loss = cat_loss + self.args.rec_mult * rec_loss + self.args.cyc_mult * cyc_loss
                 val_loss += loss.item()
+                val_cat_loss += cat_loss.item()
+                val_rec_loss += rec_loss.item()
+                val_cyc_loss += cyc_loss.item()
+
                 # TODO: MindBridge 논문대로 코드를 짰지만, 걸리는 것은 finetuning 임에도 불구하고
                 # source data의 cat과 target data의 cat을 같이 넣은 후, pred_cat을 받아 loss를 계산하는 것이다. 
                 pred_cats = np.vstack((pred_cats, pred_cat.cpu().numpy())) if not np.all(
@@ -514,4 +515,4 @@ class CrossAdapter(BaseTrainer):
         ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(26)]
         val_ap_mean = np.mean(ap_scores)
 
-        return val_loss, val_ap_mean
+        return val_loss, val_cat_loss, val_rec_loss, val_cyc_loss, val_ap_mean

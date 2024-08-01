@@ -32,20 +32,8 @@ class CrossPredictor():
         model_name = self.args.model_name
         print(f"wandb {wandb_project} run {model_name}")
         wandb.login(host='https://api.wandb.ai')
-        wandb_config = {
-            "model_name": self.args.model_name,
-            "subject": "1, 2, 5, 7" if self.args.all_subjects else str(self.args.subj),
-            "image_backbone": self.args.image_backbone,
-            "brain_backbone": self.args.brain_backbone,
-            "batch_size": self.args.batch_size,
-            "epochs": self.args.epochs,
-            "num_test": self.num_test,
-            "seed": self.args.seed,
-            "weight_decay": self.args.weight_decay,
-            "pretrained": self.args.pretrained,
-            "pretrained_wgt_path": self.args.wgt_path,
-            "backbone_freeze": self.args.backbone_freeze,
-        }
+
+        wandb_config = vars(self.args)
         print("wandb_config:\n",wandb_config)
         wandb_name = self.args.wandb_name if self.args.wandb_name != None else self.args.model_name
         wandb.init(
@@ -63,7 +51,7 @@ class CrossPredictor():
         _, _, test_context_transform, test_body_transform = utils.get_transforms_emotic()
 
         test_split = 'one_point' if self.args.one_point else 'test'
-        test_dataset = BrainDataset(subjects=self.subjects,
+        test_dataset = BrainDataset(subjects=[subj],
                                     split=test_split,
                                     data_type=self.args.data,
                                     context_transform=test_context_transform,
@@ -80,26 +68,18 @@ class CrossPredictor():
         
         print('Prepping multi-subject test dataloaders...')
 
-        # When predicting, use all subjs test data
-        self.subjects = [1, 2, 5, 7] #if self.args.all_subjects else self.args.subj
+        self.subjects = self.args.subj_tgt # for model backbone defining, not preparing test data
+
         print("Predicting for subjects:", self.subjects)
         
-        test_dls = []
-        num_test_total = 0
-        for subj in self.subjects:
-            test_dl, num_test = self.get_single_dl(subj)
-            test_dls.append(test_dl)
-            num_test_total += num_test
-        print('# test data:', num_test_total)
-
-        self.test_dls = test_dls
-        self.num_test = num_test_total
+        self.test_dl, self.num_test = self.get_single_dl(self.subjects[0])
+        print('# test data:', self.num_test)
     
     def load_model(self, args, use_best=True):
         model = BrainModel(
             image_backbone=self.args.image_backbone,
             image_model_type=self.args.model_type,
-            brain_backbone=self.args.brain_backbone,
+            brain_backbone="single_subj", # for predicting
             brain_data_type=self.args.data,
             brain_in_dim=self.args.pool_num,
             brain_out_dim=512,
@@ -116,12 +96,24 @@ class CrossPredictor():
         save_dir = os.path.join(args.save_path, model_name + args.notes)
         if use_best:
             best_path = os.path.join(save_dir, "best_model.pth")
-            model.load_state_dict(torch.load(best_path))
+            model.load_state_dict(torch.load(best_path), strict=False)
         else:
             last_path = os.path.join(save_dir, "last_model.pth")
-            model.load_state_dict(torch.load(last_path))
+            model.load_state_dict(torch.load(last_path), strict=False)
         
         self.model = model
+
+    def step(self, voxel, ctx_img, body_img, vad, cat):
+        # to device
+        ctx_img = ctx_img.to(self.device, torch.float)
+        body_img = body_img.to(self.device, torch.float)
+        cat = cat.to(self.device, torch.float)
+        vad = vad.to(self.device, torch.float)
+        voxel = voxel.to(self.device, torch.float)
+
+        pred_cat = self.model(body_img, ctx_img, voxel, self.subjects)
+
+        return pred_cat
     
     def predict(self):
         print("#### enter Predicting ####")
@@ -136,27 +128,26 @@ class CrossPredictor():
         gt_vads = np.zeros((self.num_test, 3))
 
         with torch.no_grad():
-            for test_i, data in tqdm(enumerate(zip(*self.test_dls))):
-                for ctx_img, body_img, v, a, d, gt_cat, voxel in data:
-                    ctx_img = ctx_img.to(self.device, torch.float)
-                    body_img = body_img.to(self.device, torch.float)
-                    gt_vad = torch.stack([v, a, d], dim=1)
-                    gt_cat = gt_cat.to(self.device, torch.float)
-                    voxel = F.adaptive_max_pool1d(voxel, self.args.pool_num)\
-                        .to(self.device, torch.float)
-                    
-                    pred_cat, _, _, _ = self.model(body_img, ctx_img, voxel, self.subjects)
+            for test_i, data in tqdm(enumerate(self.test_dl)):
 
-                    pred_cats[i, :] = pred_cat.cpu().numpy()
-                    gt_cats[i, :] = gt_cat.cpu().numpy()
+                ctx_img, body_img, v, a, d, gt_cat, voxel = data
+                gt_vad = torch.stack([v, a, d], dim=1)
+
+                voxel = F.adaptive_max_pool1d(voxel.float(), self.args.pool_num)
+
+                pred_cat = self.step(voxel, ctx_img, body_img, gt_vad, gt_cat)
+
+                pred_cats[test_i, :] = pred_cat.cpu().numpy()
+                gt_cats[test_i, :] = gt_cat.cpu().numpy()
 
         # evaluation for categorical emotion
         ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(26)]
-        ap_mean = np.mean(ap_scores)
+        mAP = np.mean(ap_scores)
 
         _, idx2cat = utils.get_emotic_categories()
         for i, ap in enumerate(ap_scores):
             print(f"AP for {i}. {idx2cat[i]}: {ap:.4f}")
+        print(f"mAP: {mAP:.4f}")
 
         # plot AP per category
         plt.figure(figsize=(10, 8))
@@ -167,7 +158,7 @@ class CrossPredictor():
             plt.text(i, ap, f'{ap:.4f}', ha='center', va='bottom')
 
         if self.args.wandb_log:
-            wandb.log({"AP_mean": ap_mean,
+            wandb.log({"mAP": mAP,
                        "Average Precision per category": wandb.Image(plt)})
             
         plt.clf()

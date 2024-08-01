@@ -7,7 +7,7 @@ from emotic_trainer import EmoticTrainer
 from emotic_predictor import EmoticPredictor
 from brain_trainer import BrainTrainer
 from brain_predictor import BrainPredictor
-from cross_trainer import CrossTrainer
+from cross_trainer import CrossTrainer, CrossAdapter
 from cross_predictor import CrossPredictor
 from utils import set_seed
 
@@ -64,7 +64,7 @@ def get_args():
     args.add_argument("--sampler", action="store_true", help="Use weighted random sampler", default=False)
 
     # Finetuning
-    args.add_argument('--pretrained', type=str, default="None", choices=["None", "default", "EMOTIC"], help='default: pretrained by ImageNet + Places365, EMOTIC: pretrained by EMOTIC dataset')  
+    args.add_argument('--pretrained', type=str, default="None", choices=["None", "default", "EMOTIC", "cross_subj"], help='default: pretrained by ImageNet + Places365, EMOTIC: pretrained by EMOTIC dataset')  
     args.add_argument('--wgt-path', type=str, help="If using EMOTIC pretrained wgt, then make sure to provide pretrained wgt path.")
     args.add_argument('--backbone-freeze', action='store_true', default=False, help='Freeze pretrained backbone')
     
@@ -77,7 +77,7 @@ def get_args():
     # Brain Task
     # use brain3d or roi as guidance to help predicting image => emotic categories
     args.add_argument("--image-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50"], help="Image backbone")
-    args.add_argument("--brain-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50", "mlp1", "mlp2", "mlp3", "cross_subj"], help="Brain backbone")
+    args.add_argument("--brain-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50", "mlp1", "mlp2", "mlp3", "single_subj", "cross_subj"], help="Brain backbone")
     # only predict category. Update model, criterion, training, validation, predict 
     args.add_argument("--cat-only",  action="store_true", help="predict cat only", default=False)
     args.add_argument("--fusion-ver", type=int, default=1, choices=[1, 2, 999], help="1: EMOTIC, 2: bn, 999: one_point")
@@ -86,6 +86,8 @@ def get_args():
     args.add_argument('--subj-src', type=int, default=[1], nargs= '+', choices=[1,2,5,7], help='pretraining sources for cross_subj.')
     args.add_argument('--subj-tgt', type=int, default=[1], nargs= '+', choices=[1,2,5,7], help='finetuning target for cross_subj.')
     args.add_argument("--pool-num", type=int, default=2048, help="adaptive max pooling, num")
+    args.add_argument("--rec-mult", type=float, default=1., help="The weight of brain reconstruction loss")
+    args.add_argument("--cyc-mult", type=float, default=1., help="The weight of cycle loss")
 
     args = args.parse_args()
 
@@ -101,7 +103,10 @@ def main(args):
             trainer = BrainTrainer(args=args)
             trainer.train()
         elif args.task_type == "cross_subj":
-            trainer = CrossTrainer(args=args)
+            if args.pretrained == "cross_subj":
+                trainer = CrossAdapter(args=args)
+            else:
+                trainer = CrossTrainer(args=args)
             trainer.train()
         else:
             trainer = Trainer(args=args)

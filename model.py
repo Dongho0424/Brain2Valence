@@ -51,13 +51,13 @@ class BrainModel(nn.Module):
         self.image_backbone = image_backbone
         assert image_model_type in ["B", "BI", "I", "brain_only"], f"model type {image_model_type} is not implemented"
         self.image_model_type = image_model_type
-        assert pretrained in ["None", "default", "EMOTIC"], f"pretrain {pretrained} is not implemented"
+        assert pretrained in ["None", "default", "EMOTIC", "cross_subj"], f"pretrain {pretrained} is not implemented"
         self.pretrained = pretrained
         if pretrained == "EMOTIC":
             assert(wgt_path is not None), "wgt_path is required for EMOTIC pretrained model"
 
         ## For Brain
-        assert brain_backbone in ["resnet18", "resnet50", "mlp1", "mlp2", "mlp3", "cross_subj"], f"backbone {brain_backbone} is not implemented"
+        assert brain_backbone in ["resnet18", "resnet50", "mlp1", "mlp2", "mlp3", "single_subj", "cross_subj"], f"backbone {brain_backbone} is not implemented"
         self.brain_backbone = brain_backbone
         assert brain_data_type in ["brain3d", "roi"], f"data type {brain_data_type} is not implemented"
         self.brain_data_type = brain_data_type
@@ -155,7 +155,7 @@ class BrainModel(nn.Module):
                 nn.GELU(),
                 nn.Linear(1024, brain_out_dim, bias=True),
             )
-        elif self.brain_backbone == "cross_subj":
+        elif self.brain_backbone == "cross_subj": # for training
             assert len(subjects) > 1, "cross_subj model is only for cross_subject model"
             # We assume that the number of voxels is adaptively max pooled to brain_in_dim (2048)
             # before feeding into the model 
@@ -178,6 +178,21 @@ class BrainModel(nn.Module):
                     ResMLP(h, 2)
                 )
                 for subj in subjects
+            })
+        elif self.brain_backbone == "single_subj": # for predicting
+            assert len(subjects) == 1, "As we finetune the model for single subject, only one subject is allowed for predicting"
+            # We assume that the number of voxels is adaptively max pooled to brain_in_dim (2048) 
+            # before feeding into the model 
+            
+            # MindBridge-like 
+            h = brain_in_dim
+            self.embedder = nn.ModuleDict({
+                str(subj): nn.Sequential( 
+                    ResMLP(h, 2),
+                    nn.Linear(h, brain_out_dim, bias=True),
+                    nn.LayerNorm(brain_out_dim),
+                    nn.GELU(),
+                ) for subj in subjects
             })
 
         ## fusion model ##
@@ -287,6 +302,10 @@ class BrainModel(nn.Module):
             # Use pretrained weight to image model and fusion net
             pretrained_weights = torch.load(wgt_path)
             self.load_state_dict(pretrained_weights, strict=False)
+
+            # remove last layer
+            self.model_context = nn.Sequential(*list(model_context.children())[:-1])
+            self.model_body = nn.Sequential(*list(model_body.children())[:-1])
         
         # freeze pretrained parameters
         if backbone_freeze:
@@ -309,8 +328,9 @@ class BrainModel(nn.Module):
             - different from self.subjects, which is used for initializing embedder and builder
             - this subj_list is used for finetuning
         - if cross-sujb; 
-            - pretraining: (4 * B, ...)
+            - pretraining: (3 * B, ...)
             - adapting: (2 * B, ...)
+        - if single_sujb:
         - out: (B, 26), (B, 3)
             - 26 for emotion categories
             - 3 for vad
@@ -347,7 +367,7 @@ class BrainModel(nn.Module):
                 x_brain += residual   
                 residual = x_brain
             x_brain = self.proj(x_brain) # (B, brain_out_feature)
-        elif self.brain_backbone == "cross_subj": 
+        elif self.brain_backbone == "cross_subj": # training
             assert x_brain.shape[1] == self.brain_in_dim, f"We assume that # voxels is adaptively max pooled to {self.brain_in_dim}"
             # pretraining: self.subjects == subj_list
             # adapting(fine-tuning): self.subjects != subj_list
@@ -362,7 +382,7 @@ class BrainModel(nn.Module):
             else: # random sample 2 subjects
                 subj_a, subj_b = random.sample(subj_list, 2) 
 
-            for i, subj_i in enumerate(subj_list): # [2, 5, 7(src), 1(tgt)]
+            for i, subj_i in enumerate(subj_list): # pretraining: [2, 5, 7] or # fine-tuning: [2(src), 1(tgt)]
  
                 x_i = self.embedder[str(subj_i)](x_subj_list[i]) # subj_i semantic embedding by embedder
                 
@@ -373,12 +393,20 @@ class BrainModel(nn.Module):
                 x_i_rec = self.builder[str(subj_i)](x_i) # subj_i recon brain signals by builder
                 x_rec.append(x_i_rec)
 
-            x_brain = torch.concat(x, dim=0) # (4 * B, brain_out_dim)
-            x_rec = torch.concat(x_rec, dim=0) # (4 * B, brain_out_dim)
+            x_brain = torch.concat(x, dim=0) # (3 * B, brain_out_dim)
+            x_rec = torch.concat(x_rec, dim=0) # (3 * B, brain_out_dim)
 
             # forward cycling
             x_b = self.builder[str(subj_b)](x_a)  # subj_b recon brain signal using subj_a seman embedding
             x_b = self.embedder[str(subj_b)](x_b) # subj_b semantic embedding (pseudo)
+        elif self.brain_backbone == 'single_subj': # predicting
+            # Predicting for single subject, which used to finetune this model
+            assert x_brain.shape[1] == self.brain_in_dim, f"We assume that # voxels is adaptively max pooled to {self.brain_in_dim}"
+            assert subj_list is not None, "subj_list is required for cross_subj"
+            assert len(subj_list) == 1, "subj_list should have only one subject"
+
+            x_brain = self.embedder[str(subj_list[0])](x_brain)
+
         else: raise NotImplementedError(f"backbone {self.brain_backbone} is not implemented")
 
         # for image
@@ -417,6 +445,9 @@ class BrainModel(nn.Module):
         if self.brain_backbone == 'cross_subj':
             cat_out = self.fc_cat(fuse_out)
             return cat_out, x_rec, x_a, x_b
+        elif self.brain_backbone == 'single_subj':
+            cat_out = self.fc_cat(fuse_out)
+            return cat_out
         elif self.cat_only:
             # return logit
             cat_out = self.fc_cat(fuse_out)
