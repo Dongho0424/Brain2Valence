@@ -61,6 +61,8 @@ class BrainTrainer(EmoticTrainer):
             image_model_type=self.args.model_type,
             brain_backbone=self.args.brain_backbone,
             brain_data_type=self.args.data,
+            brain_in_dim=self.args.pool_num,
+            brain_out_dim=512,
             subjects=self.subjects,
             backbone_freeze=self.args.backbone_freeze,
             pretrained=self.args.pretrained,

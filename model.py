@@ -140,8 +140,7 @@ class BrainModel(nn.Module):
         elif self.brain_backbone == "mlp3": # using AdaptiveMaxPool1d
             assert len(subjects) == 1, "mlp3 model is only for subject specific model"
 
-            features = utils.get_num_voxels(subjects[-1])
-            h = 2048
+            h = brain_in_dim
             self.max_pool = nn.AdaptiveMaxPool1d(h) 
             self.mlp = nn.ModuleList([ 
                 nn.Sequential(
