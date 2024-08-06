@@ -87,6 +87,8 @@ class SimpleCrossTrainer:
 
         train_dls = []
         num_train_total = 0
+        val_dls = []
+        num_val_total = 0
 
         # dividing batch size by subj_list, which will then be concatenated across subj during training...
         batch_size = self.args.batch_size // len(self.subjects)
@@ -99,17 +101,25 @@ class SimpleCrossTrainer:
             num_train_total += num_train
 
         # When validation, we use just single subject's validation set as self.subjects[0]
-        self.val_subj = self.subjects[0]
-        val_dl, num_val = self.get_single_dl(self.val_subj, batch_size, 'val')
+        # self.val_subj = self.subjects[0]
+        # val_dl, num_val = self.get_single_dl(self.val_subj, batch_size, 'val')
+
+        for subj in self.subjects:
+            val_dl, num_val = self.get_single_dl(subj, batch_size, 'val')
+            val_dls.append(val_dl)
+            num_val_total += num_val
 
         print('# train data:', num_train_total)
-        print('# val data:', num_val)
+        # print('# val data:', num_val)
+        print('# val data:', num_val_total)
 
         self.train_dls = train_dls
         self.num_train = num_train_total
 
-        self.val_dl = val_dl
-        self.num_val = num_val
+        # self.val_dl = val_dl
+        # self.num_val = num_val
+        self.val_dls = val_dls
+        self.num_val = num_val_total
 
     def get_model(self):
         model = BrainModel(
@@ -236,7 +246,7 @@ class SimpleCrossTrainer:
 
         return train_loss
 
-    def eval_epoch(self, epoch):
+    def single_subj_eval_epoch(self, epoch):
         self.model.eval()
 
         val_loss = 0.
@@ -259,6 +269,50 @@ class SimpleCrossTrainer:
                 gt_cats = np.vstack((gt_cats, gt_cat.cpu().numpy())) if not np.all(
                     gt_cats == 0) else gt_cat.cpu().numpy()
 
+        ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(26)]
+        val_mAP = np.mean(ap_scores)
+
+        return val_loss, val_mAP
+
+    def eval_epoch(self, epoch):
+        self.model.eval()
+
+        val_loss = 0.
+        pred_cats = np.zeros((self.args.batch_size, 26))
+        gt_cats = np.zeros((self.args.batch_size, 26))
+        with torch.no_grad():
+            for val_i, data in tqdm(enumerate(zip(*self.val_dls))):
+                # repeat_index = val_i % 3 # randomly choose the one in the repeated three
+                # TODO: 이미지 하나 당 brain_data가 3개씩인데,
+                # random하게 1개 선택하지 말고 이미지 하나 당 3개의 brain_data를 모두 사용하도록 하면 사실상 3배 data augmentation 아닌가?
+
+                voxel_list, ctx_img_list, body_img_list, vad_list, cat_list = [], [], [], [], []
+                for ctx_img, body_img, v, a, d, gt_cat, voxel in data:
+                    vad = torch.stack([v, a, d], dim=1)
+
+                    # adaptive max pool
+                    voxel = F.adaptive_max_pool1d(voxel.float(), self.args.pool_num)
+
+                    voxel_list.append(voxel)
+                    ctx_img_list.append(ctx_img)
+                    body_img_list.append(body_img)
+                    vad_list.append(vad)
+                    cat_list.append(gt_cat)
+                
+                voxel = torch.cat(voxel_list, dim=0)
+                ctx_img = torch.cat(ctx_img_list, dim=0)
+                body_img = torch.cat(body_img_list, dim=0)
+                vad = torch.cat(vad_list, dim=0)
+                gt_cat = torch.cat(cat_list, dim=0)
+
+                loss, pred_cat = self.step(voxel, ctx_img, body_img, vad, gt_cat, self.subjects)
+                val_loss += loss.item()
+
+                pred_cats = np.vstack((pred_cats, pred_cat.cpu().numpy())) if not np.all(
+                    pred_cats == 0) else pred_cat.cpu().numpy()
+                gt_cats = np.vstack((gt_cats, gt_cat.cpu().numpy())) if not np.all(
+                    gt_cats == 0) else gt_cat.cpu().numpy()
+            
         ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(26)]
         val_mAP = np.mean(ap_scores)
 
