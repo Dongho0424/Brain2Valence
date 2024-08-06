@@ -9,6 +9,8 @@ from brain_trainer import BrainTrainer
 from brain_predictor import BrainPredictor
 from cross_trainer import CrossTrainer, CrossAdapter
 from cross_predictor import CrossPredictor
+from simple_cross_trainer import SimpleCrossTrainer
+from simple_cross_predictor import SimpleCrossPredictor
 from utils import set_seed
 
 def get_args():
@@ -31,7 +33,7 @@ def get_args():
     # model_name: model 저장 디렉토리 및 현재 모델의 개괄 설명 간단히
     # kind of all_subjects_res18_mae_01, subject1_res18_mae_01
     args.add_argument('--model-name', type=str, default='',required=True, help='name of model')
-    args.add_argument('--task-type', type=str, default="reg", choices=['cross_subj', 'brain', 'emotic', 'img2vad', 'reg', 'classif'], required=True, help='regression for valence(float), multiple classification for valence type')
+    args.add_argument('--task-type', type=str, default="reg", choices=["simple_cross_subj", 'cross_subj', 'brain', 'emotic', 'img2vad', 'reg', 'classif'], required=True, help='regression for valence(float), multiple classification for valence type')
     args.add_argument('--data', type=str, default="brain3d", choices=['brain3d', 'roi'], required=True, help='data for our task. brain3d: whole brain 3d voxel, roi: well-picked brain 1d array. CAUTION: roi is only with particular subjects.')
     args.add_argument('--all-subjects', action='store_true', default=False, help='train or predict for all subjects')
     args.add_argument('--subj', type=int, default=[1], nargs='+', choices=[1,2,5,7], help='train or predict for particular subject number')
@@ -77,7 +79,7 @@ def get_args():
     # Brain Task
     # use brain3d or roi as guidance to help predicting image => emotic categories
     args.add_argument("--image-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50"], help="Image backbone")
-    args.add_argument("--brain-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50", "mlp1", "mlp2", "mlp3", "single_subj", "cross_subj"], help="Brain backbone")
+    args.add_argument("--brain-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50", "mlp1", "mlp2", "mlp3", "single_subj", "cross_subj", "simple_cross_subj"], help="Brain backbone")
     # only predict category. Update model, criterion, training, validation, predict 
     args.add_argument("--cat-only",  action="store_true", help="predict cat only", default=False)
     args.add_argument("--fusion-ver", type=int, default=1, choices=[1, 2, 999], help="1: EMOTIC, 2: bn, 999: one_point")
@@ -108,6 +110,9 @@ def main(args):
             else:
                 trainer = CrossTrainer(args=args)
             trainer.train()
+        elif args.task_type == "simple_cross_subj":
+            trainer = SimpleCrossTrainer(args=args)
+            trainer.train()
         else:
             trainer = Trainer(args=args)
             trainer.train()
@@ -121,6 +126,9 @@ def main(args):
             predictor.predict()
         elif args.task_type == "cross_subj":
             predictor = CrossPredictor(args=args)
+            predictor.predict()
+        elif args.task_type == "simple_cross_subj":
+            predictor = SimpleCrossPredictor(args=args)
             predictor.predict()
         else:
             predictor = Predictor(args=args)

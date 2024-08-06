@@ -51,13 +51,14 @@ class BrainModel(nn.Module):
         self.image_backbone = image_backbone
         assert image_model_type in ["B", "BI", "I", "brain_only"], f"model type {image_model_type} is not implemented"
         self.image_model_type = image_model_type
-        assert pretrained in ["None", "default", "EMOTIC", "cross_subj"], f"pretrain {pretrained} is not implemented"
+        assert pretrained in ["None", "default", "EMOTIC", "simple_cross_subj", "cross_subj"], f"pretrain {pretrained} is not implemented"
         self.pretrained = pretrained
         if pretrained == "EMOTIC":
             assert(wgt_path is not None), "wgt_path is required for EMOTIC pretrained model"
 
         ## For Brain
-        assert brain_backbone in ["resnet18", "resnet50", "mlp1", "mlp2", "mlp3", "single_subj", "cross_subj"], f"backbone {brain_backbone} is not implemented"
+        assert brain_backbone in ["resnet18", "resnet50", "mlp1", "mlp2", "mlp3", "simple_cross_subj", "single_subj", "cross_subj"],\
+              f"backbone {brain_backbone} is not implemented"
         self.brain_backbone = brain_backbone
         assert brain_data_type in ["brain3d", "roi"], f"data type {brain_data_type} is not implemented"
         self.brain_data_type = brain_data_type
@@ -155,6 +156,21 @@ class BrainModel(nn.Module):
                 nn.GELU(),
                 nn.Linear(1024, brain_out_dim, bias=True),
             )
+        elif self.brain_backbone == "simple_cross_subj": # for training
+            # We assume that the number of voxels is adaptively max pooled to brain_in_dim (2048)
+            # before feeding into the model 
+            
+            # MindBridge-like embedder and builder
+            h = brain_in_dim
+            self.embedder = nn.ModuleDict({
+                str(subj): nn.Sequential( 
+                    ResMLP(h, 2),
+                    nn.Linear(h, 1024, bias=True),
+                    nn.LayerNorm(1024),
+                    nn.GELU(),
+                    nn.Linear(1024, brain_out_dim, bias=True),
+                ) for subj in subjects
+            })
         elif self.brain_backbone == "cross_subj": # for training
             assert len(subjects) > 1, "cross_subj model is only for cross_subject model"
             # We assume that the number of voxels is adaptively max pooled to brain_in_dim (2048)
@@ -292,7 +308,7 @@ class BrainModel(nn.Module):
 
             self.load_state_dict(pretrained_weights, strict=False)
             # print(self.state_dict()[first_fusion_layer_key])
-        elif self.pretrained == "cross_subj":
+        elif self.pretrained in ["cross_subj", "simple_cross_subj"]:
             assert brain_data_type == "roi", "cross_subj is only available for roi data type" 
             print("Img Context model: Use pretrained model by EMOTIC dataset")
             print("Img Body model: Use pretrained model by EMOTIC dataset")
@@ -326,11 +342,7 @@ class BrainModel(nn.Module):
         - x_brain: brain3d or roi
         - subj_list: list of subj
             - different from self.subjects, which is used for initializing embedder and builder
-            - this subj_list is used for finetuning
-        - if cross-sujb; 
-            - pretraining: (3 * B, ...)
-            - adapting: (2 * B, ...)
-        - if single_sujb:
+            - this subj_list is used for selecting specific subject's embedder
         - out: (B, 26), (B, 3)
             - 26 for emotion categories
             - 3 for vad
@@ -367,6 +379,17 @@ class BrainModel(nn.Module):
                 x_brain += residual   
                 residual = x_brain
             x_brain = self.proj(x_brain) # (B, brain_out_feature)
+        elif self.brain_backbone == "simple_cross_subj": # training
+            assert x_brain.shape[1] == self.brain_in_dim, f"We assume that # voxels is adaptively max pooled to {self.brain_in_dim}"
+            assert subj_list is not None, "subj_list is required for cross_subj"
+
+            x_subj_list = torch.chunk(x_brain, len(subj_list), dim=0) # let each element: (B, 2048)
+            x = []
+            for i, subj_i in enumerate(subj_list): # pretraining: [2, 5, 7], # fine-tuning: [1]
+                x_i = self.embedder[str(subj_i)](x_subj_list[i]) # subj_i semantic embedding by embedder
+                x.append(x_i)
+            x_brain = torch.concat(x, dim=0) # (3 * B, brain_out_dim)
+
         elif self.brain_backbone == "cross_subj": # training
             assert x_brain.shape[1] == self.brain_in_dim, f"We assume that # voxels is adaptively max pooled to {self.brain_in_dim}"
             # pretraining: self.subjects == subj_list
