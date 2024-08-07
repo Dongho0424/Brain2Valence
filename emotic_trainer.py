@@ -21,7 +21,7 @@ class EmoticTrainer:
         self.set_device()
         self.train_dl, self.val_dl, self.num_train, self.num_val = self.prepare_dataloader()\
               if not args.pretraining else self.prepare_dataloader_for_pretraining()
-        self.set_wandb_config()
+        if self.args.wandb_log: self.set_wandb_config()
         self.model: nn.Module = self.get_model()
         self.optimizer = self.get_optimizer()
         self.scheduler = self.get_scheduler()
@@ -38,21 +38,7 @@ class EmoticTrainer:
         model_name = self.args.model_name
         print(f"wandb {wandb_project} run {model_name}")
         wandb.login(host='https://api.wandb.ai')
-        wandb_config = {
-            "model_name": self.args.model_name,
-            "subject": "1, 2, 5, 7" if self.args.all_subjects else str(self.args.subj),
-            "image_backbone": self.args.image_backbone,
-            "brain_backbone": self.args.brain_backbone,
-            "batch_size": self.args.batch_size,
-            "epochs": self.args.epochs,
-            "num_train": self.num_train,
-            "num_val": self.num_val,
-            "seed": self.args.seed,
-            "weight_decay": self.args.weight_decay,
-            "pretrained": self.args.pretrained,
-            "pretrained_wgt_path": self.args.wgt_path,
-            "backbone_freeze": self.args.backbone_freeze,
-        }
+        wandb_config = vars(self.args)
         print("wandb_config:\n", wandb_config)
 
         wandb_name = self.args.wandb_name if self.args.wandb_name != None else self.args.model_name
@@ -217,7 +203,7 @@ class EmoticTrainer:
         print("#### enter Training ####")
 
         best_val_loss = float("inf")
-        best_val_ap_mean = -float("inf")
+        best_val_mAP = -float("inf")
         # now set equal
         cat_loss_param = 0.5
         vad_loss_param = 0.5
@@ -260,10 +246,6 @@ class EmoticTrainer:
 
             train_loss /= self.num_train
 
-            wandb.log(
-                {"train_loss": train_loss,
-                 "lr": self.optimizer.param_groups[0]['lr']}, step=epoch)
-
             self.model.eval()
             val_loss = 0
             pred_cats = np.zeros((self.args.batch_size, 26))
@@ -290,22 +272,28 @@ class EmoticTrainer:
                         loss = cat_loss_param * loss_cat + vad_loss_param * loss_vad
                         val_loss += loss.item()
                 
-                val_loss /= self.num_val
-                wandb.log({"val_loss": val_loss}, step=epoch)
+            val_loss /= self.num_val
+            ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(26)]
+            mAP = np.mean(ap_scores)
 
-                ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(26)]
-                ap_mean = np.mean(ap_scores)
-                wandb.log({"val_AP_mean": ap_mean}, step=epoch)
+            if self.args.wandb_log:
+                wandb.log({"train_loss": train_loss,
+                        "lr": self.optimizer.param_groups[0]['lr'],
+                        "val_loss": val_loss,
+                        "val_mAP": mAP
+                        }, step=epoch)
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 print ('saving model at epoch: %d' %(epoch))
-                wandb.log({"best_val_loss": best_val_loss}, step=epoch)
+                if self.args.wandb_log:
+                    wandb.log({"best_val_loss": best_val_loss}, step=epoch)
                 self.save_model(self.args, self.model, best=True)
 
-            if ap_mean > best_val_ap_mean:
-                best_val_ap_mean = ap_mean
-                wandb.log({"best_val_AP_mean": ap_mean}, step=epoch)
+            if mAP > best_val_mAP:
+                best_val_mAP = mAP
+                if self.args.wandb_log:
+                    wandb.log({"best_val_mAP": mAP}, step=epoch)
                 
             self.scheduler.step()
 
@@ -313,7 +301,7 @@ class EmoticTrainer:
                 epoch, train_loss, val_loss))
 
         self.save_model(self.args, self.model, best=False)
-        # wandb.log({"best_val_loss": best_val_loss})
+
         return self.model
 
     def save_model(self, args, model, best):

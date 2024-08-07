@@ -17,7 +17,7 @@ class BrainPredictor():
         self.args = args
 
         self.test_dl, self.num_test = self.prepare_dataloader()
-        self.set_wandb_config()
+        if self.args.wandb_log: self.set_wandb_config()
         self.model: nn.Module = self.load_model(args, use_best=self.args.best)     
 
     def set_wandb_config(self):
@@ -25,20 +25,8 @@ class BrainPredictor():
         model_name = self.args.model_name
         print(f"wandb {wandb_project} run {model_name}")
         wandb.login(host='https://api.wandb.ai')
-        wandb_config = {
-            "model_name": self.args.model_name,
-            "subject": "1, 2, 5, 7" if self.args.all_subjects else str(self.args.subj),
-            "image_backbone": self.args.image_backbone,
-            "brain_backbone": self.args.brain_backbone,
-            "batch_size": self.args.batch_size,
-            "epochs": self.args.epochs,
-            "num_test": self.num_test,
-            "seed": self.args.seed,
-            "weight_decay": self.args.weight_decay,
-            "pretrained": self.args.pretrained,
-            "pretrained_wgt_path": self.args.wgt_path,
-            "backbone_freeze": self.args.backbone_freeze,
-        }
+
+        wandb_config = vars(self.args)
         print("wandb_config:\n",wandb_config)
         wandb_name = self.args.wandb_name if self.args.wandb_name != None else self.args.model_name
         wandb.init(
@@ -55,7 +43,7 @@ class BrainPredictor():
         
         print('Prepping test dataloaders...')
 
-        self.subjects = [1, 2, 5, 7] if self.args.all_subjects else [self.args.subj]
+        self.subjects = [1, 2, 5, 7] if self.args.all_subjects else self.args.subj
 
         _, _, test_context_transform, test_body_transform = utils.get_transforms_emotic()
         test_split = 'one_point' if self.args.one_point else 'test'
@@ -91,6 +79,7 @@ class BrainPredictor():
         save_dir = os.path.join(args.save_path, model_name + args.notes)
         if use_best:
             best_path = os.path.join(save_dir, "best_model.pth")
+            print(f"Loading best model from {best_path}")
             model.load_state_dict(torch.load(best_path))
         else:
             last_path = os.path.join(save_dir, "last_model.pth")
@@ -138,12 +127,12 @@ class BrainPredictor():
 
         # evaluation for categorical emotion
         ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(26)]
-        ap_mean = np.mean(ap_scores)
+        mAP = np.mean(ap_scores)
 
-        wandb.log({"AP_mean": ap_mean})
         _, idx2cat = utils.get_emotic_categories()
         for i, ap in enumerate(ap_scores):
             print(f"AP for {i}. {idx2cat[i]}: {ap:.4f}")
+        print("mAP: {:.4f}".format(mAP))
 
         # plot AP per category
         plt.figure(figsize=(10, 8))
@@ -153,7 +142,9 @@ class BrainPredictor():
         for i, ap in enumerate(ap_scores):
             plt.bar(i, ap)
             plt.text(i, ap, f'{ap:.4f}', ha='center', va='bottom')
-        wandb.log({f"Average Precision per category": wandb.Image(plt)})
+        if self.args.wandb_log:
+            wandb.log({"mAP": mAP,
+                       "Average Precision per category": wandb.Image(plt)})
         plt.clf()
 
         if not self.args.cat_only: # when predict vad only
