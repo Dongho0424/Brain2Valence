@@ -66,7 +66,7 @@ def get_args():
     args.add_argument("--sampler", action="store_true", help="Use weighted random sampler", default=False)
 
     # Finetuning
-    args.add_argument('--pretrained', type=str, default="None", choices=["None", "default", "EMOTIC", "cross_subj"], help='default: pretrained by ImageNet + Places365, EMOTIC: pretrained by EMOTIC dataset')  
+    args.add_argument('--pretrained', type=str, default="None", choices=["None", "default", "EMOTIC", "cross_subj", "simple_cross_subj"], help='default: pretrained by ImageNet + Places365, EMOTIC: pretrained by EMOTIC dataset')  
     args.add_argument('--wgt-path', type=str, help="If using EMOTIC pretrained wgt, then make sure to provide pretrained wgt path.")
     args.add_argument('--backbone-freeze', action='store_true', default=False, help='Freeze pretrained backbone')
     
@@ -82,7 +82,7 @@ def get_args():
     args.add_argument("--brain-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50", "mlp1", "mlp2", "mlp3", "single_subj", "cross_subj", "simple_cross_subj"], help="Brain backbone")
     # only predict category. Update model, criterion, training, validation, predict 
     args.add_argument("--cat-only",  action="store_true", help="predict cat only", default=False)
-    args.add_argument("--fusion-ver", type=int, default=1, choices=[1, 2, 999], help="1: EMOTIC, 2: bn, 999: one_point")
+    args.add_argument("--fusion-ver", type=int, default=1, choices=[1, 2, 3, 999], help="1: EMOTIC, 2: bn, 3: new!, 999: one_point")
 
     # For cross_subject training
     args.add_argument('--subj-src', type=int, default=[1], nargs= '+', choices=[1,2,5,7], help='pretraining sources for cross_subj.')

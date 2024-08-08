@@ -242,6 +242,11 @@ class BrainModel(nn.Module):
                 nn.GELU(),
                 nn.Linear(fuse_in_dim, fuse_out_dim),
             )
+        elif fusion_ver == 3:
+             self.model_fusion = nn.Sequential(
+                 nn.AdaptiveAvgPool1d(fuse_out_dim), # 1536 -> 256 avg pooling
+                 ResMLP(fuse_out_dim, 3),
+             )
         elif fusion_ver == 999: # Replace BatchNorm to LayerNorm
             self.model_fusion = nn.Sequential(
                 nn.Linear(fuse_in_dim, fuse_out_dim),
