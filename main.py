@@ -82,7 +82,7 @@ def get_args():
     args.add_argument("--brain-backbone", type=str, default="resnet18", choices=["resnet18", "resnet50", "mlp1", "mlp2", "mlp3", "single_subj", "cross_subj", "simple_cross_subj"], help="Brain backbone")
     # only predict category. Update model, criterion, training, validation, predict 
     args.add_argument("--cat-only",  action="store_true", help="predict cat only", default=False)
-    args.add_argument("--fusion-ver", type=int, default=1, choices=[1, 2, 3, 999], help="1: EMOTIC, 2: bn, 3: new!, 999: one_point")
+    args.add_argument("--fusion-ver", type=int, default=1, help="1: EMOTIC, 2: bn, 3: new!, 999: one_point")
 
     # For cross_subject training
     args.add_argument('--subj-src', type=int, default=[1], nargs= '+', choices=[1,2,5,7], help='pretraining sources for cross_subj.')

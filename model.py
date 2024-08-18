@@ -247,6 +247,14 @@ class BrainModel(nn.Module):
                  nn.AdaptiveAvgPool1d(fuse_out_dim), # 1536 -> 256 avg pooling
                  ResMLP(fuse_out_dim, 3),
              )
+        elif fusion_ver == 4:
+             self.model_fusion = nn.Sequential(
+                ResMLP(fuse_in_dim, 2),
+                nn.Linear(fuse_in_dim, fuse_out_dim),
+                nn.LayerNorm(fuse_out_dim),
+                nn.GELU(),
+                nn.Dropout(0.15)
+             )
         elif fusion_ver == 999: # Replace BatchNorm to LayerNorm
             self.model_fusion = nn.Sequential(
                 nn.Linear(fuse_in_dim, fuse_out_dim),
@@ -524,6 +532,8 @@ class EmoticModel(nn.Module):
 
             if self.pretrained == "None":
                 print("Context & Body model: train from scratch")
+                self.model_context = nn.Sequential(*list(model_context.children())[:-1])
+                self.model_body = nn.Sequential(*list(model_body.children())[:-1])
             elif self.pretrained == "default": 
                 # context model
                 context_state_dict = torch.load('/home/dongho/brain2valence/data/places/resnet18_state_dict.pth')

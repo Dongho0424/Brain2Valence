@@ -71,7 +71,7 @@ class EmoticTrainer:
             val_data = val_data[val_data['folder'] == 'mscoco/images']
 
         if self.args.with_nsd:
-            self.subjects = [1, 2, 5, 7] if self.args.all_subjects else [self.args.subj]
+            self.subjects = [1, 2, 5, 7] if self.args.all_subjects else self.args.subj
             print(f"Do EMOTIC task sing NSD data given subject: {self.subjects}")
             emotic_data = utils.get_emotic_df(is_split=False)
             train_data = utils.get_emotic_coco_nsd_df(emotic_data=emotic_data, 
@@ -110,7 +110,7 @@ class EmoticTrainer:
         print('Prepping train and validation dataloaders...')
 
         data_path = "/home/dongho/brain2valence/data/emotic"
-        self.subjects = [1, 2, 5, 7] if self.args.all_subjects else [self.args.subj]
+        self.subjects = [1, 2, 5, 7] if self.args.all_subjects else self.args.subj
         train_data, val_data, _ = utils.get_emotic_df_for_pretraining(subjects=self.subjects)
         train_context_transform, train_body_transform, test_context_transform, test_body_transform =\
             utils.get_transforms_emotic()
