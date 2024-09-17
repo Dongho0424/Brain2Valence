@@ -18,7 +18,7 @@ class EmoticPredictor:
 
         self.test_dl, self.num_test = self.prepare_dataloader()\
               if not args.pretraining else self.prepare_dataloader_for_pretraining()
-        self.set_wandb_config()
+        if self.args.wandb_log: self.set_wandb_config()
         self.model: nn.Module = self.load_model(args, use_best=self.args.best)
 
     def set_wandb_config(self):
@@ -68,7 +68,7 @@ class EmoticPredictor:
             test_data = test_data[test_data['folder'] == 'mscoco/images']
 
         if self.args.with_nsd:
-            self.subjects = [1, 2, 5, 7] if self.args.all_subjects else [self.args.subj]
+            self.subjects = [1, 2, 5, 7] if self.args.all_subjects else self.args.subj
             print(f"Do EMOTIC task sing NSD data given subject: {self.subjects}")
             emotic_data = utils.get_emotic_df(is_split=False)
             test_data = utils.get_emotic_coco_nsd_df(emotic_data=emotic_data, 
@@ -173,10 +173,12 @@ class EmoticPredictor:
         ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(26)]
         ap_mean = np.mean(ap_scores)
 
-        wandb.log({"AP_mean": ap_mean})
+        if self.args.wandb_log: wandb.log({"AP_mean": ap_mean})
+        
         _, idx2cat = utils.get_emotic_categories()
-        for i, ap in enumerate(ap_scores):
-            print(f"AP for {i}. {idx2cat[i]}: {ap:.4f}")
+        # for i, ap in enumerate(ap_scores):
+            # print(f"AP for {i}. {idx2cat[i]}: {ap:.4f}")
+        print(f"{self.args.lr} model; AP_mean: {ap_mean}")
 
         # plot AP per category
         plt.figure(figsize=(10, 8))
@@ -186,7 +188,7 @@ class EmoticPredictor:
         for i, ap in enumerate(ap_scores):
             plt.bar(i, ap)
             plt.text(i, ap, f'{ap:.4f}', ha='center', va='bottom')
-        wandb.log({f"Average Prevision per category": wandb.Image(plt)})
+        if self.args.wandb_log: wandb.log({f"Average Prevision per category": wandb.Image(plt)})
         plt.clf()
         
         if not self.args.cat_only:
