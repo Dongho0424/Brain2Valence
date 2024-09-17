@@ -195,7 +195,7 @@
                 "--data", "roi",
                 "--cat-only",
                 "--fusion-ver", "1",
-                "--wgt-path", "/home/dongho/brain2valence/trained_models/Pretrainig_1e-50705_1_excluding_intersec/best_model.pth"
+                "--wgt-path", "/home/dongho/brain2valence/trained_models/EMOTIC_pretrained_img_extractor_weight/best_model.pth"
             ],
             "env": {
                 "CUDA_VISIBLE_DEVICES": "0"
@@ -235,7 +235,7 @@
                 "--cat-only",
                 "--fusion-ver", "1",
                 "--best",
-                "--wgt-path", "/home/dongho/brain2valence/trained_models/Pretrainig_1e-50705_1_excluding_intersec/best_model.pth"
+                "--wgt-path", "/home/dongho/brain2valence/trained_models/EMOTIC_pretrained_img_extractor_weight/best_model.pth"
             ],
             "env": {
                 "CUDA_VISIBLE_DEVICES": "0"
