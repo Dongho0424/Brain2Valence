@@ -22,12 +22,29 @@
 - `--cat-only`: 최종 예측하는 task를 26 emotion categories의 classification로 한정. 
 - `--wandb-log`: wandb에 업로드. 
     - `--notes`, `--group`, `--wandb-project`, `--wandb-entity` setting required.
-### pretrained weight (by EMOTIC)
-- `trained_models/EMOTIC_pretrained_img_extractor_weight/best_model.pth`
-### example
+### pretrained weight
+- Imagenet: by torchvision package. nothing to do.
+- Places365: `data/places/resnet18_state_dict.pth`
+- EMOTIC: `trained_models/EMOTIC_pretrained_img_extractor_weight/best_model.pth`
+### example 1
+- training from **scratch**
 - image + ROI model
-- pretrained by EMOTIC dataset
 - adapt AdaptiveMaxPooling(h) to fMRI data
 ```
-bash ./scripts/img_roi.sh
+bash ./scripts/img_roi_None.sh
+```
+### example 2
+- pretrained by **ImageNet and Places365** dataset
+    - First introduced by EMOTIC paper.
+- image + ROI model
+- adapt AdaptiveMaxPooling(h) to fMRI data
+```
+bash ./scripts/img_roi_default.sh
+```
+### example 3
+- pretrained by **EMOTIC** dataset
+- image + ROI model
+- adapt AdaptiveMaxPooling(h) to fMRI data
+```
+bash ./scripts/img_roi_EMOTIC.sh
 ```

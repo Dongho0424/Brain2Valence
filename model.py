@@ -281,7 +281,7 @@ class BrainModel(nn.Module):
         elif self.pretrained == "default": 
             # context model pretrained by Places365 dataset
             print("Context model: Use pretrained model by Places365 dataset")
-            context_state_dict = torch.load('/home/dongho/brain2valence/data/places/resnet18_state_dict.pth')
+            context_state_dict = torch.load('./data/places/resnet18_state_dict.pth')
             model_context.load_state_dict(context_state_dict)
             # body model pretrained by ImageNet dataset
             print("Body model: Use pretrained model by ImageNet dataset")
@@ -536,7 +536,7 @@ class EmoticModel(nn.Module):
                 self.model_body = nn.Sequential(*list(model_body.children())[:-1])
             elif self.pretrained == "default": 
                 # context model
-                context_state_dict = torch.load('/home/dongho/brain2valence/data/places/resnet18_state_dict.pth')
+                context_state_dict = torch.load('./data/places/resnet18_state_dict.pth')
                 model_context.load_state_dict(context_state_dict)
                 
                 self.model_context = nn.Sequential(*list(model_context.children())[:-1])

@@ -6,11 +6,6 @@
 **/train_logs
 **/slurm-*.out
 
-*.pth
-# EMOTIC_pretrained_img_extractor_weight; for github release
-!/trained_models/EMOTIC_pretrained_img_extractor_weight/best_model.pth
-!/trained_models/EMOTIC_pretrained_img_extractor_weight/last_model.pth
-
 src/evals
 src/evals-*
 /checkpoints
@@ -21,3 +16,11 @@ playgrounds/*
 data/*
 
 scripts2/
+
+*.pth
+# EMOTIC_pretrained_img_extractor_weight; for github release
+!/trained_models/EMOTIC_pretrained_img_extractor_weight/best_model.pth
+!/trained_models/EMOTIC_pretrained_img_extractor_weight/last_model.pth
+# Places365 pretrained weight
+!/data/places/resnet18_state_dict.pth
+!/data/places/
