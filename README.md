@@ -28,7 +28,7 @@
 - EMOTIC: `trained_models/EMOTIC_pretrained_img_extractor_weight/best_model.pth`
 ### example 1
 - training from **scratch**
-- image + ROI model
+- **image + ROI model**
 - adapt AdaptiveMaxPooling(h) to fMRI data
 ```
 bash ./scripts/img_roi_None.sh
@@ -36,15 +36,21 @@ bash ./scripts/img_roi_None.sh
 ### example 2
 - pretrained by **ImageNet and Places365** dataset
     - First introduced by EMOTIC paper.
-- image + ROI model
+- **image + ROI model**
 - adapt AdaptiveMaxPooling(h) to fMRI data
 ```
 bash ./scripts/img_roi_default.sh
 ```
 ### example 3
 - pretrained by **EMOTIC** dataset
-- image + ROI model
+- **image + ROI model**
 - adapt AdaptiveMaxPooling(h) to fMRI data
 ```
 bash ./scripts/img_roi_EMOTIC.sh
+```
+### example 4
+- pretrained by **EMOTIC** dataset
+- **image Only model**
+```
+bash ./scripts/img_only_EMOTIC.sh
 ```
