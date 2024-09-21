@@ -26,6 +26,7 @@
 - Imagenet: by torchvision package. nothing to do.
 - Places365: `data/places/resnet18_state_dict.pth`
 - EMOTIC: `trained_models/EMOTIC_pretrained_img_extractor_weight/best_model.pth`
+## ROI + img model
 ### example 1
 - training from **scratch**
 - **image + ROI model**
@@ -48,9 +49,23 @@ bash ./scripts/img_roi_default.sh
 ```
 bash ./scripts/img_roi_EMOTIC.sh
 ```
+## img only model
 ### example 4
 - pretrained by **EMOTIC** dataset
 - **image Only model**
 ```
 bash ./scripts/img_only_EMOTIC.sh
+```
+
+## pretraining img extractor by EMOTIC dataset
+### example 5
+- pretraining img extractor by EMOTIC dataset
+- *excluding images shown to subj1*
+- `--pretrained: default`, then pretraining on top of ImageNet & Places365 pretrained weight
+- `--pretrained: None`, then pretraining from scratch
+- The combination of previously pretrained weight is as follows.
+    1. lr: 9e-6
+    2. `--pretrained: default`
+```
+bash ./scripts/pretraining.sh
 ```
