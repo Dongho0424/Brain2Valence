@@ -7,10 +7,11 @@ import os
 import utils
 from model import BrainModel
 from tqdm import tqdm
-from dataset import BrainDataset
+from dataset import BrainDataset, BrainAllDataset
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import mean_squared_error, r2_score, average_precision_score
+import h5py
 
 class BrainPredictor():
     def __init__(self, args):
@@ -30,13 +31,9 @@ class BrainPredictor():
         print("wandb_config:\n",wandb_config)
         wandb_name = self.args.wandb_name if self.args.wandb_name != None else self.args.model_name
         wandb.init(
-            id=wandb_name+self.args.notes,
             project=wandb_project,
             name=wandb_name,
-            group=self.args.group,
             config=wandb_config,
-            resume="allow",
-            notes=self.args.notes
         )
 
     def prepare_dataloader(self): 
@@ -46,18 +43,46 @@ class BrainPredictor():
         self.subjects = [1, 2, 5, 7] if self.args.all_subjects else self.args.subj
 
         _, _, test_context_transform, test_body_transform = utils.get_transforms_emotic()
-        test_split = 'one_point' if self.args.one_point else 'test'
-        test_dataset = BrainDataset(subjects=self.subjects,
-                                    split=test_split,
-                                    data_type=self.args.data,
-                                    context_transform=test_context_transform,
-                                    body_transform=test_body_transform,
-                                    normalize=True,
-                                    )
+        
+        if self.args.all_subjects:
+            test_dataset = BrainAllDataset(
+                split ='test',
+                data_type=self.args.data,
+                context_transform=test_context_transform,
+                body_transform=test_body_transform,
+                normalize=True,
+            )
+        else:
+            test_split = 'one_point' if self.args.one_point else 'test'
+            test_dataset = BrainDataset(subjects=self.subjects,
+                                        split=test_split,
+                                        data_type=self.args.data,
+                                        context_transform=test_context_transform,
+                                        body_transform=test_body_transform,
+                                        normalize=True,
+                                        )
 
         # always batch size is 1
         test_dl = DataLoader(test_dataset, batch_size=1, shuffle=False)
         print('# test data:', len(test_dataset))
+        
+        
+                
+        if self.args.all_subjects:
+            self.voxels = {}
+            self.num_voxels = {}
+
+            for s in range(1, 9):
+                f = h5py.File(f'/home/data/mindeyev2/betas_all_subj0{s}_fp32_renorm.hdf5', 'r')
+                betas = f['betas'][:]
+                betas = torch.Tensor(betas).to("cpu").to(torch.float16)
+                print(betas.shape)
+                self.num_voxels[f'subj0{s}'] = betas.shape[1]
+                self.voxels[f'subj0{s}'] = betas
+                
+            print(self.voxels.keys())
+
+            print('Loaded all subjects')
 
         return test_dl, len(test_dataset)
     
@@ -67,6 +92,7 @@ class BrainPredictor():
             image_model_type=self.args.model_type,
             brain_backbone=self.args.brain_backbone,
             brain_data_type=self.args.data,
+            brain_in_dim=self.args.pool_num,
             pretrained=self.args.pretrained,
             wgt_path=self.args.wgt_path,
             subjects=self.subjects,
@@ -76,7 +102,7 @@ class BrainPredictor():
         )
         
         model_name = args.model_name # ex) "all_subjects_res18_mae_2"
-        save_dir = os.path.join(args.save_path, model_name + args.notes)
+        save_dir = os.path.join(args.save_path, model_name)
         if use_best:
             best_path = os.path.join(save_dir, "best_model.pth")
             print(f"Loading best model from {best_path}")
@@ -84,6 +110,9 @@ class BrainPredictor():
         else:
             last_path = os.path.join(save_dir, "last_model.pth")
             model.load_state_dict(torch.load(last_path))
+            
+        self.max_pool = nn.AdaptiveMaxPool1d(self.args.pool_num) 
+
         return model
     
     def predict(self):
@@ -109,8 +138,16 @@ class BrainPredictor():
                 body_image = body_image.float().cuda()
                 gt_cat = category.float().cuda()
                 gt_vad = torch.stack([valence, arousal, dominance], dim=1).float().cuda()
-                brain_data = brain_data.float().cuda()
-
+                
+                if not self.args.all_subjects:
+                    brain_data = brain_data.float().cuda()
+                else:
+                    subj, beta_idx= brain_data
+                    brain_data = []
+                    for s,b in zip(subj, beta_idx):
+                        brain_data.append(self.max_pool(torch.tensor(self.voxels[s][b]).unsqueeze(0).float().cuda()))
+                    brain_data = torch.stack(brain_data).cuda().squeeze(1) # FIXME: max pool 하고 model에 넘기는 걸로 변경만 하면 될 듯
+            
                 if self.args.cat_only: # only category
                     pred_cat = self.model(body_image, context_image, brain_data)
 

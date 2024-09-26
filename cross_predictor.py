@@ -37,13 +37,9 @@ class CrossPredictor():
         print("wandb_config:\n",wandb_config)
         wandb_name = self.args.wandb_name if self.args.wandb_name != None else self.args.model_name
         wandb.init(
-            id=wandb_name+self.args.notes,
             project=wandb_project,
             name=wandb_name,
-            group=self.args.group,
             config=wandb_config,
-            resume="allow",
-            notes=self.args.notes
         )
 
     def get_single_dl(self, subj):
@@ -93,7 +89,7 @@ class CrossPredictor():
         model.to(self.device)
         
         model_name = args.model_name # ex) "all_subjects_res18_mae_2"
-        save_dir = os.path.join(args.save_path, model_name + args.notes)
+        save_dir = os.path.join(args.save_path, model_name)
         if use_best:
             best_path = os.path.join(save_dir, "best_model.pth")
             model.load_state_dict(torch.load(best_path), strict=False)

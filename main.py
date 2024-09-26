@@ -25,16 +25,14 @@ def get_args():
     # ex) 240203_res18_mae_01_predict
     args.add_argument('--wandb-name', type=str, help='wandb name. if none, same with model_name')
     args.add_argument('--wandb-project', type=str, default='Brain2Valence', help='name of wandb project')
-    args.add_argument('--wandb-entity', type=str, default='donghochoi', help='name of wandb entity')
-    args.add_argument('--group', type=str, required=True, help='group name for wandb run')
-    args.add_argument('--notes', type=str, required=True, help='date_#_tag')
+    args.add_argument('--wandb-entity', type=str, default='beotborry', help='name of wandb entity')
 
     # execute options
     # model_name: model 저장 디렉토리 및 현재 모델의 개괄 설명 간단히
     # kind of all_subjects_res18_mae_01, subject1_res18_mae_01
     args.add_argument('--model-name', type=str, default='',required=True, help='name of model')
     args.add_argument('--task-type', type=str, default="reg", choices=["simple_cross_subj", 'cross_subj', 'brain', 'emotic', 'img2vad', 'reg', 'classif'], required=True, help='regression for valence(float), multiple classification for valence type')
-    args.add_argument('--data', type=str, default="brain3d", choices=['brain3d', 'roi'], required=True, help='data for our task. brain3d: whole brain 3d voxel, roi: well-picked brain 1d array. CAUTION: roi is only with particular subjects.')
+    args.add_argument('--data', type=str, default="brain3d", choices=['brain3d', 'roi', 'emo_vis_roi', 'emo_roi'], required=True, help='data for our task. brain3d: whole brain 3d voxel, roi: well-picked brain 1d array. CAUTION: roi is only with particular subjects.')
     args.add_argument('--all-subjects', action='store_true', default=False, help='train or predict for all subjects')
     args.add_argument('--subj', type=int, default=[1], nargs='+', choices=[1,2,5,7], help='train or predict for particular subject number')
     args.add_argument('--exec_mode', type=str, choices=['train', 'predict'], required=True, help='execution mode')

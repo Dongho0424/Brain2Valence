@@ -60,7 +60,7 @@ class BrainModel(nn.Module):
         assert brain_backbone in ["resnet18", "resnet50", "mlp1", "mlp2", "mlp3", "simple_cross_subj", "single_subj", "cross_subj"],\
               f"backbone {brain_backbone} is not implemented"
         self.brain_backbone = brain_backbone
-        assert brain_data_type in ["brain3d", "roi"], f"data type {brain_data_type} is not implemented"
+        assert brain_data_type in ["brain3d", "roi", 'emo_vis_roi', 'vis_roi', 'emo_roi'], f"data type {brain_data_type} is not implemented"
         self.brain_data_type = brain_data_type
         self.brain_in_dim = brain_in_dim
         self.subjects = subjects
@@ -138,7 +138,7 @@ class BrainModel(nn.Module):
                 nn.Linear(1024, brain_out_dim, bias=True),
             )
         elif self.brain_backbone == "mlp3": # using AdaptiveMaxPool1d
-            assert len(subjects) == 1, "mlp3 model is only for subject specific model"
+            # assert len(subjects) == 1, "mlp3 model is only for subject specific model"
 
             h = brain_in_dim
             self.max_pool = nn.AdaptiveMaxPool1d(h) 
@@ -384,7 +384,7 @@ class BrainModel(nn.Module):
                 residual = x_brain
             x_brain = self.proj(x_brain) # (B, brain_out_feature)
         elif self.brain_backbone == "mlp3":
-            x_brain = self.max_pool(x_brain) # adaptive max pool
+            # x_brain = self.max_pool(x_brain) # adaptive max pool
             residual = x_brain
             for block in range(len(self.mlp)):
                 x_brain = self.mlp[block](x_brain)

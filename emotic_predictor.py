@@ -10,6 +10,7 @@ from tqdm import tqdm
 from dataset import EmoticDataset
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from sklearn.metrics import mean_squared_error, r2_score, average_precision_score
 
 class EmoticPredictor:
@@ -43,13 +44,10 @@ class EmoticPredictor:
         print("wandb_config:\n",wandb_config)
         wandb_name = self.args.wandb_name if self.args.wandb_name != None else self.args.model_name
         wandb.init(
-            id=wandb_name+self.args.notes,
+            entity=self.args.wandb_entity,
             project=wandb_project,
             name=wandb_name,
-            group=self.args.group,
             config=wandb_config,
-            resume="allow",
-            notes=self.args.notes
         )
         
     def prepare_dataloader(self): 
@@ -70,10 +68,15 @@ class EmoticPredictor:
         if self.args.with_nsd:
             self.subjects = [1, 2, 5, 7] if self.args.all_subjects else self.args.subj
             print(f"Do EMOTIC task sing NSD data given subject: {self.subjects}")
-            emotic_data = utils.get_emotic_df(is_split=False)
-            test_data = utils.get_emotic_coco_nsd_df(emotic_data=emotic_data, 
-                                                      split='test', 
-                                                      subjects=self.subjects)
+            if self.args.all_subjects:
+                emotic_data = pd.read_csv('emotic_nsd_joint_metadata.csv')
+                test_data = emotic_data[emotic_data['emotic_split'] == 'test']
+                test_data = test_data[test_data['subject'].isin(['1', '2', '5', '7', 'all'])]
+            else:
+                emotic_data = utils.get_emotic_df(is_split=False)
+                test_data = utils.get_emotic_coco_nsd_df(emotic_data=emotic_data, 
+                                                         split='test', 
+                                                          subjects=self.subjects)
 
         test_dataset = EmoticDataset(data_path=data_path,
                                     split='test',
@@ -127,10 +130,10 @@ class EmoticPredictor:
         model_name = args.model_name # ex) "all_subjects_res18_mae_2"
 
         if use_best:
-            best_path = os.path.join(self.args.save_path, model_name + args.notes, "best_model.pth")
+            best_path = os.path.join(self.args.save_path, model_name, "best_model.pth")
             model.load_state_dict(torch.load(best_path))
         else:
-            last_path = os.path.join(self.args.save_path, model_name + args.notes, "last_model.pth")
+            last_path = os.path.join(self.args.save_path, model_name, "last_model.pth")
             model.load_state_dict(torch.load(last_path))
         return model
     

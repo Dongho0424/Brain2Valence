@@ -2,12 +2,14 @@ import torch
 import numpy as np
 import os
 import pandas as pd
+import nibabel as nib
 from torch.utils.data import Dataset
 from PIL import Image
 from torchvision import transforms
 from sklearn.model_selection import train_test_split
 import utils
-
+import h5py
+from ast import literal_eval
 class BrainValenceDataset(Dataset):
     def __init__(self,
                  data_path,
@@ -137,6 +139,31 @@ class BrainValenceDataset(Dataset):
             roi = roi[repeat_index]
 
             data = roi
+            
+        elif self.data == 'emo_vis_roi' or self.data == 'emo_roi':
+            if len(self.subjects) > 1:
+                raise ValueError("Only one subject's roi data is available")
+            
+            roi_path = f"/home/data/nsd_aws/nsddata/ppdata/subj0{self.subjects[0]}/func1pt8mm/roi"
+            hcp_mmp_roi = nib.load(os.path.join(roi_path, 'HCP_MMP1.nii.gz')).get_fdata()
+            nsdgeneral_roi = nib.load(os.path.join(roi_path, 'nsdgeneral.nii.gz')).get_fdata()
+            
+            emotion_related_roi_idx = [104, 106, 109, 111, 112, 126, 127, 155, 167,168, 178]
+            
+            nsdgeneral_mask = (nsdgeneral_roi == 1)
+            emotion_related_mask = np.isin(hcp_mmp_roi, emotion_related_roi_idx)
+            
+            if self.data == 'emo_vis_roi':
+                roi = nsdgeneral_mask | emotion_related_mask
+            elif self.data == 'emo_roi':
+                roi = emotion_related_mask
+            
+            brain_3d = torch.from_numpy(np.load(os.path.join(
+                self.data_path, split, sample['mri'])))  # (3, *, *, *)
+            # brain_3d = torch.mean(brain_3d, dim=0) # (*, *, *)
+            brain_3d = brain_3d[repeat_index]
+            data = brain_3d[roi].flatten()
+            
 
         # regression task: normalized valence
         # classification task: valence_interval with respect to num_classif
@@ -273,7 +300,8 @@ class EmoticDataset(Dataset):
         
         # crop body from image
         # using bbox
-        bbox = sample['bbox']
+        bbox = literal_eval(sample['bbox'])
+        # bbox = sample['bbox']
         body_image = context_image.crop((bbox[0], bbox[1], bbox[2], bbox[3]))
 
         # use transform
@@ -291,11 +319,92 @@ class EmoticDataset(Dataset):
 
         # get category label torch.tensor
         cat_label = torch.zeros(26)
-        for cat in  sample['category']:
-            cat_label[cat] = 1
+        for cat in literal_eval(sample['category']):
+            cat_label[int(cat)] = 1
+        # for cat in  sample['category']:
+        #     cat_label[cat] = 1
 
         return context_image, body_image, valence, arousal, dominance, cat_label
 
+class BrainAllDataset(Dataset):
+    def __init__(self,
+                 split,
+                 data_type='brain3d',
+                 context_transform=None,
+                 body_transform=None,
+                 normalize=False,
+                 ):
+        self.metadata = pd.read_csv('emotic_nsd_joint_metadata.csv')
+        self.split = split
+        
+        self.metadata = self.metadata[self.metadata['emotic_split'] == split]
+        self.metadata = self.metadata[self.metadata['subject'].isin(['1','2','5','7','all'])]
+        self.metadata.reset_index(inplace=True, drop=True)
+        
+        self.context_transform = context_transform
+        self.body_transform = body_transform
+        self.normalize = normalize
+        self.data_type = data_type
+        
+        # if self.data_type == 'roi':
+        #     f = h5py.File(f'/home/data/mindeyev2/betas_all_subj0{s}_fp32_renorm.hdf5', 'r')
+        #     betas = f['betas'][:]
+        #     betas = torch.Tensor(betas).to("cpu")
+                
+        self.coco_data_path = "/home/dongho/brain2valence/data/emotic"
+        
+    def __len__(self):
+        return len(self.metadata)
+    
+    def __getitem__(self, idx):
+        sample = self.metadata.iloc[idx]
+        context_image = Image.open(os.path.join(self.coco_data_path, sample['folder'], sample['filename']))
+        
+        bbox = literal_eval(sample['bbox'])
+        try:
+            body_image = context_image.crop((bbox[0], bbox[1], bbox[2], bbox[3]))
+        except:
+            print(f"Error: {sample['folder']}, {sample['filename']}, {bbox[0], bbox[1], bbox[2], bbox[3]}")
+            body_image = context_image
+        # use transform
+        if self.context_transform is not None:
+            context_image = context_image.convert("RGB")
+            context_image = self.context_transform(context_image)
+        if self.body_transform is not None:
+            body_image = body_image.convert("RGB")
+            body_image = self.body_transform(body_image)
+        
+        # get VAD
+        valence = sample['valence'] / 10.0 if self.normalize else sample['valence']
+        arousal = sample['arousal'] / 10.0 if self.normalize else sample['arousal']
+        dominance = sample['dominance'] / 10.0 if self.normalize else sample['dominance']
+
+        # get category label torch.tensor
+        cat_label = torch.zeros(26)
+
+        for cat in literal_eval(sample['category']):
+            cat_label[int(cat)] = 1
+
+        # Because there are 3 snapshots of both brain3d and roi
+        # repeat_index = np.random.randint(3) 
+        data = None     
+        
+        if self.data_type == 'roi' or self.data_type == 'emo_roi' or self.data_type == 'emo_vis_roi':
+            if sample['shared1000']:
+                subj_rand_index = np.random.choice([1,2,5,7], 1)[0]
+                repeat_index = np.random.randint(3)
+                beta_idx = sample[f'subject{subj_rand_index}_rep{repeat_index}_beta_idx']
+                subj = f'subj0{subj_rand_index}'
+            else:
+                # find subject whose sample[f'subject{1~8}_rep{repeat_index}_beta_idx'] is not -1
+                sub_idx = int(sample['subject'])
+                repeat_index = np.random.randint(3)
+                beta_idx = sample[f'subject{sub_idx}_rep{repeat_index}_beta_idx']
+                subj = f'subj0{sub_idx}'
+                
+        return context_image, body_image, valence, arousal, dominance, cat_label, (subj, beta_idx)
+
+        
 class BrainDataset(Dataset):
     """
     Dataset for brain data guidance while image => emotion category prediction
@@ -375,6 +484,26 @@ class BrainDataset(Dataset):
             roi = roi[repeat_index]
 
             data = roi
+        elif self.data_type == 'emo_vis_roi' or self.data_type == 'emo_roi':
+            if len(self.subjects) > 1:
+                raise ValueError("Only one subject's roi data is available")
+            
+            roi_path = f"/home/data/nsd_aws/nsddata/ppdata/subj0{self.subjects[0]}/func1pt8mm/roi"
+            hcp_mmp_roi = nib.load(os.path.join(roi_path, 'HCP_MMP1.nii.gz')).get_fdata()
+            nsdgeneral_roi = nib.load(os.path.join(roi_path, 'nsdgeneral.nii.gz')).get_fdata()
+            
+            emotion_related_roi_idx = [104, 106, 109, 111, 112, 126, 127, 155, 167,168, 178]
+            
+            nsdgeneral_mask = (nsdgeneral_roi == 1)
+            emotion_related_mask = np.isin(hcp_mmp_roi, emotion_related_roi_idx)
+            
+            if self.data_type == 'emo_vis_roi':
+                roi = nsdgeneral_mask | emotion_related_mask
+            elif self.data_type == 'emo_roi':
+                roi = emotion_related_mask
+            
+            brain_3d = torch.from_numpy(np.load(os.path.join(self.nsd_data_path, sample['brain3d'])))[repeat_index]
+            data = brain_3d[roi].flatten()
         else: 
             raise ValueError("data_type should be either 'brain3d' or 'roi'")
 

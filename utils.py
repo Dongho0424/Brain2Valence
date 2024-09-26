@@ -48,7 +48,9 @@ def get_emotic_data() -> dict:
     1. get EMOTIC data from COCO dataset
     2. zip its cocoid with annotations(bbox, valence, arousal, dominance)
     """
-    file_name_emotic_annot = '/home/dongho/brain2valence/data/emotic_annotations.mat'
+    # file_name_emotic_annot = '/home/dongho/brain2valence/data/emotic_annotations.mat'
+    file_name_emotic_annot = 'Annotations/Annotations.mat'
+    
 
     # get EMOTIC data
     data = scipy.io.loadmat(file_name_emotic_annot, simplify_cells=True)
@@ -434,7 +436,8 @@ def get_emotic_df(is_split=True):
     - EMOTIC dataset: Multiple people annotated in one image.
     - return metadata: Based on emotional annot not an image, i.e., multiple rows(annots) can be for one image.
     """
-    file_name_emotic_annot = '/home/dongho/brain2valence/data/emotic_annotations.mat'
+    # file_name_emotic_annot = '/home/dongho/brain2valence/data/emotic_annotations.mat'
+    file_name_emotic_annot = 'Annotations/Annotations.mat'
     data = scipy.io.loadmat(file_name_emotic_annot, simplify_cells=True)
     emotic_annotations = data['train'] + data['test'] + data['val']
 
@@ -446,10 +449,11 @@ def get_emotic_df(is_split=True):
     arousals = []
     dominances = []
     categories = [] # for emotic discrete categories, as index
+    emotic_split = []
 
     cat2idx, _ = get_emotic_categories()
     
-    for sample in emotic_annotations:
+    for i, sample in enumerate(emotic_annotations):
 
         folder = sample['folder']
         filename = sample['filename']
@@ -457,8 +461,14 @@ def get_emotic_df(is_split=True):
         image_id = sample.get('original_database', {}).get('info', {}).get('image_id', -1)
         people = [sample['person']] if isinstance(sample['person'], dict) else sample['person']
 
-        for p in people:
 
+        for p in people:
+            if i < len(data['train']):
+                emotic_split.append('train')
+            elif i < len(data['train']) + len(data['test']):
+                emotic_split.append('test')
+            else:
+                emotic_split.append('val')
             folders.append(folder)
             filenames.append(filename)
             image_ids.append(image_id)
@@ -496,7 +506,8 @@ def get_emotic_df(is_split=True):
                                 'valence': valences,
                                 'arousal': arousals,
                                 'dominance': dominances,
-                                'category': categories})
+                                'category': categories,
+                                'emotic_split': emotic_split})
     if is_split:
         # split data
         # train: 70%, val: 15%, test: 15%
