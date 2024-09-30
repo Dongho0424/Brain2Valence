@@ -436,8 +436,8 @@ def get_emotic_df(is_split=True):
     - EMOTIC dataset: Multiple people annotated in one image.
     - return metadata: Based on emotional annot not an image, i.e., multiple rows(annots) can be for one image.
     """
-    # file_name_emotic_annot = '/home/dongho/brain2valence/data/emotic_annotations.mat'
-    file_name_emotic_annot = 'Annotations/Annotations.mat'
+    file_name_emotic_annot = '/home/dongho/brain2valence/data/emotic_annotations.mat'
+    # file_name_emotic_annot = '/home/juhyeon/Brain2Valence/Annotations/Annotations.mat'
     data = scipy.io.loadmat(file_name_emotic_annot, simplify_cells=True)
     emotic_annotations = data['train'] + data['test'] + data['val']
 
