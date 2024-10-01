@@ -33,11 +33,11 @@ def get_args():
     args.add_argument('--model-name', type=str, default='',required=True, help='name of model')
     args.add_argument('--task-type', type=str, default="reg", choices=["simple_cross_subj", 'cross_subj', 'brain', 'emotic', 'img2vad', 'reg', 'classif'], required=True, help='regression for valence(float), multiple classification for valence type')
     args.add_argument('--data', type=str, default="brain3d", choices=['brain3d', 'roi', 'emo_vis_roi', 'emo_roi'], required=True, help='data for our task. brain3d: whole brain 3d voxel, roi: well-picked brain 1d array. CAUTION: roi is only with particular subjects.')
-    args.add_argument('--all-subjects', action='store_true', default=False, help='train or predict for all subjects')
-    args.add_argument('--subj', type=int, default=[1], nargs='+', choices=[1,2,5,7], help='train or predict for particular subject number')
+    args.add_argument('--subj', type=int, default=[1], nargs='+', choices=[1,2,3,4,5,6,7,8], help='train or predict for particular subject number')
     args.add_argument('--exec_mode', type=str, choices=['train', 'predict'], required=True, help='execution mode')
     args.add_argument('--seed', type=int, default=42, help='random seed')
-
+    args.add_argument('--dataset-ver', type=int, default=1, choices=[1,2], help='1: mindeye1 dataset; nsd split, 2: mindeye2 dataset; emotic split, more data')
+    
     # for train
     args.add_argument("--criterion", type=str, default="mae", choices=["mse", "mae", "ce", "emotic_L2", "emotic_SL1"], help="Criterion. mse or mae for valence, crossentropy for classification") 
     args.add_argument("--cat-criterion", type=str, default="emotic", choices=["emotic", "softmargin"], help="MultiLabel clf, loss in EMOTIC paper or BCEloss (actually same as MultiLabelSoftMarginLoss)") 

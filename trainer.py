@@ -54,7 +54,7 @@ class Trainer:
         emotic_annotations = utils.get_emotic_data()
         nsd_df, target_cocoid = utils.get_NSD_data(emotic_annotations)
 
-        self.subjects = [1, 2, 5, 7] if self.args.all_subjects else [self.args.subj]
+        self.subjects = self.args.subj
         print('Train for current subjects:,', [f"subject{sub}" for sub in self.subjects])
 
         transform = v2.Compose([

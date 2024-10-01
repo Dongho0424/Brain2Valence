@@ -7,7 +7,7 @@ import os
 import utils
 from model import BrainModel
 from tqdm import tqdm
-from dataset import BrainDataset, BrainAllDataset
+from dataset import BrainDataset, BrainDataset2
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import mean_squared_error, r2_score, average_precision_score
@@ -26,11 +26,13 @@ class BrainPredictor():
         model_name = self.args.model_name
         print(f"wandb {wandb_project} run {model_name}")
         wandb.login(host='https://api.wandb.ai')
-
+        self.args.num_test = self.num_test # for wandb logging
         wandb_config = vars(self.args)
         print("wandb_config:\n",wandb_config)
         wandb_name = self.args.wandb_name if self.args.wandb_name != None else self.args.model_name
         wandb.init(
+            id=self.args.model_name,
+            entity=self.args.wandb_entity,
             project=wandb_project,
             name=wandb_name,
             config=wandb_config,
@@ -40,19 +42,50 @@ class BrainPredictor():
         
         print('Prepping test dataloaders...')
 
-        self.subjects = [1, 2, 5, 7] if self.args.all_subjects else self.args.subj
+        self.subjects = self.args.subj
 
         _, _, test_context_transform, test_body_transform = utils.get_transforms_emotic()
         
-        if self.args.all_subjects:
-            test_dataset = BrainAllDataset(
+        if self.args.dataset_ver == 2:
+            test_dataset = BrainDataset2(
+                subjects=self.subjects,
                 split ='test',
                 data_type=self.args.data,
                 context_transform=test_context_transform,
                 body_transform=test_body_transform,
                 normalize=True,
             )
-        else:
+
+            self.voxels = {}
+            self.num_voxels = {}
+            self.voxel_means = {}
+            self.voxel_stds = {}
+            
+            basedir = '/home/juhyeon/Brain2Valence'
+
+            for s in self.subjects:
+                if self.args.data == 'roi':
+                    betas = np.load(os.path.join(basedir, f'vis_subj{s}_all_beta.npy'))
+                    betas = torch.tensor(betas).to("cpu").to(torch.float16)
+                    mean = np.load(os.path.join(basedir, f'vis_subj{s}_train_beta_mean.npy'))
+                    std = np.load(os.path.join(basedir, f'vis_subj{s}_train_beta_std.npy'))
+                elif self.args.data == 'emo_roi':
+                    betas = np.load(os.path.join(basedir, f'emo_subj{s}_all_beta.npy'))
+                    betas = torch.tensor(betas).to("cpu").to(torch.float16)
+                    mean = np.load(os.path.join(basedir, f'emo_subj{s}_train_beta_mean.npy'))
+                    std = np.load(os.path.join(basedir, f'emo_subj{s}_train_beta_std.npy'))
+                elif self.args.data == 'emo_vis_roi':
+                    betas = np.load(os.path.join(basedir, f'emo_vis_subj{s}_all_beta.npy'))
+                    betas = torch.tensor(betas).to("cpu").to(torch.float16)
+                    mean = np.load(os.path.join(basedir, f'emo_vis_subj{s}_train_beta_mean.npy'))
+                    std = np.load(os.path.join(basedir, f'emo_vis_subj{s}_train_beta_std.npy'))
+                    
+                self.num_voxels[f'subj0{s}'] = betas.shape[1]
+                self.voxels[f'subj0{s}'] = betas
+                self.voxel_means[f'subj0{s}'] = mean
+                self.voxel_stds[f'subj0{s}'] = std
+
+        elif self.args.dataset_ver == 1:
             test_split = 'one_point' if self.args.one_point else 'test'
             test_dataset = BrainDataset(subjects=self.subjects,
                                         split=test_split,
@@ -61,28 +94,11 @@ class BrainPredictor():
                                         body_transform=test_body_transform,
                                         normalize=True,
                                         )
+        else: raise ValueError(f"dataset_ver {self.args.dataset_ver} is not supported")
 
         # always batch size is 1
         test_dl = DataLoader(test_dataset, batch_size=1, shuffle=False)
         print('# test data:', len(test_dataset))
-        
-        
-                
-        if self.args.all_subjects:
-            self.voxels = {}
-            self.num_voxels = {}
-
-            for s in range(1, 9):
-                f = h5py.File(f'/home/data/mindeyev2/betas_all_subj0{s}_fp32_renorm.hdf5', 'r')
-                betas = f['betas'][:]
-                betas = torch.Tensor(betas).to("cpu").to(torch.float16)
-                print(betas.shape)
-                self.num_voxels[f'subj0{s}'] = betas.shape[1]
-                self.voxels[f'subj0{s}'] = betas
-                
-            print(self.voxels.keys())
-
-            print('Loaded all subjects')
 
         return test_dl, len(test_dataset)
     
@@ -139,14 +155,16 @@ class BrainPredictor():
                 gt_cat = category.float().cuda()
                 gt_vad = torch.stack([valence, arousal, dominance], dim=1).float().cuda()
                 
-                if not self.args.all_subjects:
-                    brain_data = brain_data.float().cuda()
-                else:
-                    subj, beta_idx= brain_data
+                if self.args.dataset_ver == 2:
+                    subj, beta_idx = brain_data
                     brain_data = []
-                    for s,b in zip(subj, beta_idx):
-                        brain_data.append(self.max_pool(torch.tensor(self.voxels[s][b]).unsqueeze(0).float().cuda()))
-                    brain_data = torch.stack(brain_data).cuda().squeeze(1) # FIXME: max pool 하고 model에 넘기는 걸로 변경만 하면 될 듯
+                    for s, b in zip(subj, beta_idx):
+                        v = torch.tensor(self.voxels[s][b]).unsqueeze(0).float().cuda()
+                        v = (v - torch.tensor(self.voxel_means[s]).float().cuda()) / torch.tensor(self.voxel_stds[s]).float().cuda()
+                        brain_data.append(self.max_pool(v))
+                    brain_data = torch.stack(brain_data).cuda().squeeze(1)
+                elif self.args.dataset_ver == 1:
+                    brain_data = brain_data.float().cuda()
             
                 if self.args.cat_only: # only category
                     pred_cat = self.model(body_image, context_image, brain_data)

@@ -9,7 +9,7 @@ from torchvision.transforms import v2
 from tqdm import tqdm
 import pandas as pd
 import scipy
-from dataset import BrainDataset, BrainAllDataset
+from dataset import BrainDataset, BrainDataset2
 from loss import ContinuousLoss_L2, DiscreteLoss, ContinuousLoss_SL1
 from emotic_trainer import EmoticTrainer
 from model import BrainModel
@@ -27,58 +27,35 @@ class BrainTrainer(EmoticTrainer):
 
         print('Prepping train and validation dataloaders...')
 
-        self.subjects = [1, 2, 5, 7] if self.args.all_subjects else self.args.subj
+        self.subjects = self.args.subj
 
         train_context_transform, train_body_transform, test_context_transform, test_body_transform =\
             utils.get_transforms_emotic()
 
-        if self.args.all_subjects:
-            train_dataset = BrainAllDataset(
-                                            split='train',
-                                            data_type=self.args.data,
-                                            context_transform=train_context_transform,
-                                            body_transform=train_body_transform,
-                                            normalize=True,
-                                            )
+        if self.args.dataset_ver == 2:
+            train_dataset = BrainDataset2(subjects=self.subjects,
+                                          split='train',
+                                          data_type=self.args.data,
+                                          context_transform=train_context_transform,
+                                          body_transform=train_body_transform,
+                                          normalize=True,
+                                          )
             
-            val_dataset = BrainAllDataset(
+            val_dataset = BrainDataset2(subjects=self.subjects,
                                         split='val',
                                         data_type=self.args.data,
                                         context_transform=test_context_transform,
                                         body_transform=test_body_transform,
                                         normalize=True,
                                         )
-        else:
-            train_split = 'one_point' if self.args.one_point else 'train'
-            train_dataset = BrainDataset(subjects=self.subjects,
-                                        split=train_split,
-                                        data_type=self.args.data,
-                                        context_transform=train_context_transform,
-                                        body_transform=train_body_transform,
-                                        normalize=True,
-                                        )
-            val_split = 'one_point' if self.args.one_point else 'val'
-            val_dataset = BrainDataset(subjects=self.subjects,
-                                    split=val_split,
-                                    data_type=self.args.data,
-                                    context_transform=test_context_transform,
-                                    body_transform=test_body_transform,
-                                    normalize=True,
-                                    )
-
-        train_dl = DataLoader(train_dataset, batch_size=self.args.batch_size, shuffle=True)
-        val_dl = DataLoader(val_dataset, batch_size=self.args.batch_size, shuffle=False)
-        print('# train data:', len(train_dataset))
-        print('# val data:', len(val_dataset))
-        
-        if self.args.all_subjects:
             self.voxels = {}
             self.num_voxels = {}
             self.voxel_means = {}
             self.voxel_stds = {}
 
             basedir = '/home/juhyeon/Brain2Valence'
-            for s in [1, 2, 5, 7]:
+
+            for s in self.subjects:
                 if self.args.data == 'roi':
                     betas = np.load(os.path.join(basedir, f'vis_subj{s}_all_beta.npy'))
                     betas = torch.tensor(betas).to("cpu").to(torch.float16)
@@ -99,10 +76,30 @@ class BrainTrainer(EmoticTrainer):
                 self.voxels[f'subj0{s}'] = betas
                 self.voxel_means[f'subj0{s}'] = mean
                 self.voxel_stds[f'subj0{s}'] = std
-                
-            print(self.voxels.keys())
 
-            print('Loaded all subjects')
+        elif self.args.dataset_ver == 1:
+            train_split = 'one_point' if self.args.one_point else 'train'
+            train_dataset = BrainDataset(subjects=self.subjects,
+                                        split=train_split,
+                                        data_type=self.args.data,
+                                        context_transform=train_context_transform,
+                                        body_transform=train_body_transform,
+                                        normalize=True,
+                                        )
+            val_split = 'one_point' if self.args.one_point else 'val'
+            val_dataset = BrainDataset(subjects=self.subjects,
+                                    split=val_split,
+                                    data_type=self.args.data,
+                                    context_transform=test_context_transform,
+                                    body_transform=test_body_transform,
+                                    normalize=True,
+                                    )
+        else: raise ValueError('dataset_ver should be 1 or 2, who are you?')
+
+        train_dl = DataLoader(train_dataset, batch_size=self.args.batch_size, shuffle=True)
+        val_dl = DataLoader(val_dataset, batch_size=self.args.batch_size, shuffle=False)
+        print('# train data:', len(train_dataset))
+        print('# val data:', len(val_dataset))
 
         return train_dl, val_dl, len(train_dataset), len(val_dataset)
     
@@ -150,16 +147,16 @@ class BrainTrainer(EmoticTrainer):
                 gt_cat = category.float().cuda()
                 gt_vad = torch.stack([valence, arousal, dominance], dim=1).float().cuda()
                 
-                if not self.args.all_subjects:
-                    brain_data = brain_data.float().cuda()
-                else:
+                if self.args.dataset_ver == 2:
                     subj, beta_idx = brain_data
                     brain_data = []
                     for s, b in zip(subj, beta_idx):
                         v = torch.tensor(self.voxels[s][b]).unsqueeze(0).float().cuda()
                         v = (v - torch.tensor(self.voxel_means[s]).float().cuda()) / torch.tensor(self.voxel_stds[s]).float().cuda()
                         brain_data.append(self.max_pool(v))
-                    brain_data = torch.stack(brain_data).cuda().squeeze(1) # FIXME: max pool 하고 model에 넘기는 걸로 변경만 하면 될 듯
+                    brain_data = torch.stack(brain_data).cuda().squeeze(1)
+                elif self.args.dataset_ver == 1:
+                    brain_data = brain_data.float().cuda()
                 
                 if self.args.cat_only: # only category
                     # brain_data: brain3d or roi
@@ -205,9 +202,7 @@ class BrainTrainer(EmoticTrainer):
                     gt_cat = category.float().cuda()
                     gt_vad = torch.stack([valence, arousal, dominance], dim=1).float().cuda()
                     
-                    if not self.args.all_subjects:
-                        brain_data = brain_data.float().cuda()
-                    else:
+                    if self.args.dataset_ver == 2:
                         subj, beta_idx = brain_data
                         brain_data = []
                         for s, b in zip(subj, beta_idx):
@@ -215,6 +210,8 @@ class BrainTrainer(EmoticTrainer):
                             v = (v - torch.tensor(self.voxel_means[s]).float().cuda()) / torch.tensor(self.voxel_stds[s]).float().cuda()
                             brain_data.append(self.max_pool(v))
                         brain_data = torch.stack(brain_data).cuda().squeeze(1)
+                    elif self.args.dataset_ver == 1:
+                        brain_data = brain_data.float().cuda()
                     
                     if self.args.cat_only: # only category
                         # brain_data: brain3d or roi

@@ -68,6 +68,7 @@ class BrainModel(nn.Module):
 
         print("#############################")
         print("### Initialize BrainModel ###")
+        print("Subject:", subjects)
         print("Image Model backbone:", image_backbone)
         print("Image Model type:", image_model_type)
         print("Pretrain Type:", pretrained)
@@ -514,7 +515,7 @@ class EmoticModel(nn.Module):
             assert(wgt_path is not None), "wgt_path is required for EMOTIC pretrained model"
 
         print("#############################")
-        print("### Initialize Image2VADModel ###")
+        print("### Initialize EMOTICModel ###")
         print("Image Model backbone:", image_backbone)
         print("Image Model type:", image_model_type)
         print("Category Prediction Only:", cat_only)

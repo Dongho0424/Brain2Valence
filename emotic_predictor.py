@@ -27,23 +27,14 @@ class EmoticPredictor:
         model_name = self.args.model_name
         print(f"wandb {wandb_project} run {model_name}")
         wandb.login(host='https://api.wandb.ai')
-        wandb_config = {
-            "model_name": self.args.model_name,
-            "subject": "1, 2, 5, 7" if self.args.all_subjects else str(self.args.subj),
-            "image_backbone": self.args.image_backbone,
-            "brain_backbone": self.args.brain_backbone,
-            "batch_size": self.args.batch_size,
-            "epochs": self.args.epochs,
-            "num_test": self.num_test,
-            "seed": self.args.seed,
-            "weight_decay": self.args.weight_decay,
-            "pretrained": self.args.pretrained,
-            "pretrained_wgt_path": self.args.wgt_path,
-            "backbone_freeze": self.args.backbone_freeze,
-        }
+
+        self.args.num_test = self.num_test # for wandb logging
+        wandb_config = vars(self.args)
         print("wandb_config:\n",wandb_config)
         wandb_name = self.args.wandb_name if self.args.wandb_name != None else self.args.model_name
+
         wandb.init(
+            id=self.args.model_name,
             entity=self.args.wandb_entity,
             project=wandb_project,
             name=wandb_name,
@@ -66,17 +57,20 @@ class EmoticPredictor:
             test_data = test_data[test_data['folder'] == 'mscoco/images']
 
         if self.args.with_nsd:
-            self.subjects = [1, 2, 5, 7] if self.args.all_subjects else self.args.subj
+            self.subjects = self.args.subj
             print(f"Do EMOTIC task sing NSD data given subject: {self.subjects}")
-            if self.args.all_subjects:
+
+            if self.args.dataset_ver == 2:
                 emotic_data = pd.read_csv('emotic_nsd_joint_metadata.csv')
+                emotic_data = emotic_data[emotic_data['subject'].isin([str(s) for s in self.subjects] + ['all'])]
                 test_data = emotic_data[emotic_data['emotic_split'] == 'test']
-                test_data = test_data[test_data['subject'].isin(['1', '2', '5', '7', 'all'])]
-            else:
+
+            elif self.args.dataset_ver == 1:
                 emotic_data = utils.get_emotic_df(is_split=False)
                 test_data = utils.get_emotic_coco_nsd_df(emotic_data=emotic_data, 
                                                          split='test', 
-                                                          subjects=self.subjects)
+                                                         subjects=self.subjects)
+            else: raise ValueError("Invalid dataset version")
 
         test_dataset = EmoticDataset(data_path=data_path,
                                     split='test',
@@ -98,7 +92,7 @@ class EmoticPredictor:
         print('Prepping test dataloaders...')
 
         data_path = "/home/dongho/brain2valence/data/emotic"
-        self.subjects = [1, 2, 5, 7] if self.args.all_subjects else [self.args.subj]
+        self.subjects = self.args.subj
         _, _, test_data = utils.get_emotic_df_for_pretraining(subjects=self.subjects)
         _, _, test_context_transform, test_body_transform =\
             utils.get_transforms_emotic()

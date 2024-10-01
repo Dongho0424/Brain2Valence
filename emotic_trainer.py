@@ -38,11 +38,14 @@ class EmoticTrainer:
         model_name = self.args.model_name
         print(f"wandb {wandb_project} run {model_name}")
         wandb.login(host='https://api.wandb.ai')
+        self.args.num_train = self.num_train # for wandb logging
+        self.args.num_val = self.num_val # for wandb logging
         wandb_config = vars(self.args)
         print("wandb_config:\n", wandb_config)
 
         wandb_name = self.args.wandb_name if self.args.wandb_name != None else self.args.model_name
         wandb.init(
+            id=self.args.model_name,
             entity=self.args.wandb_entity,
             project=wandb_project,
             name=wandb_name,
@@ -66,15 +69,18 @@ class EmoticTrainer:
             train_data = train_data[train_data['folder'] == 'mscoco/images']
             val_data = val_data[val_data['folder'] == 'mscoco/images']
 
+        # Do the task with images only shown to subjects
         if self.args.with_nsd:
-            self.subjects = [1, 2, 5, 7] if self.args.all_subjects else self.args.subj
+            self.subjects = self.args.subj
             print(f"Do EMOTIC task sing NSD data given subject: {self.subjects}")
-            if self.args.all_subjects:
+
+            if self.args.dataset_ver == 2:
                 emotic_data = pd.read_csv('emotic_nsd_joint_metadata.csv')
-                emotic_data = emotic_data[emotic_data['subject'].isin(['1','2','5','7','all'])]
+                emotic_data = emotic_data[emotic_data['subject'].isin([str(s) for s in self.subjects] + ['all'])]
                 train_data = emotic_data[emotic_data['emotic_split'] == 'train']
                 val_data = emotic_data[emotic_data['emotic_split'] == 'val']
-            else:
+
+            elif self.args.dataset_ver == 1:
                 emotic_data = utils.get_emotic_df(is_split=False)
                 train_data = utils.get_emotic_coco_nsd_df(emotic_data=emotic_data, 
                                                         split='train', 
@@ -82,6 +88,7 @@ class EmoticTrainer:
                 val_data = utils.get_emotic_coco_nsd_df(emotic_data=emotic_data, 
                                                         split='val', 
                                                          subjects=self.subjects)
+            else: raise NotImplementedError(f'dataset_ver {self.args.dataset_ver} is not implemented')
 
         train_dataset = EmoticDataset(data_path=data_path,
                                       split='train',
@@ -112,7 +119,7 @@ class EmoticTrainer:
         print('Prepping train and validation dataloaders...')
 
         data_path = "/home/dongho/brain2valence/data/emotic"
-        self.subjects = [1, 2, 5, 7] if self.args.all_subjects else self.args.subj
+        self.subjects = self.args.subj
         train_data, val_data, _ = utils.get_emotic_df_for_pretraining(subjects=self.subjects)
         train_context_transform, train_body_transform, test_context_transform, test_body_transform =\
             utils.get_transforms_emotic()

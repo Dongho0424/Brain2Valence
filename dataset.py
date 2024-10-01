@@ -327,8 +327,9 @@ class EmoticDataset(Dataset):
 
         return context_image, body_image, valence, arousal, dominance, cat_label
 
-class BrainAllDataset(Dataset):
+class BrainDataset2(Dataset):
     def __init__(self,
+                 subjects,
                  split,
                  data_type='brain3d',
                  context_transform=None,
@@ -336,10 +337,11 @@ class BrainAllDataset(Dataset):
                  normalize=False,
                  ):
         self.metadata = pd.read_csv('emotic_nsd_joint_metadata.csv')
+        self.subjects = subjects
         self.split = split
         
         self.metadata = self.metadata[self.metadata['emotic_split'] == split]
-        self.metadata = self.metadata[self.metadata['subject'].isin(['1','2','5','7','all'])]
+        self.metadata = self.metadata[self.metadata['subject'].isin([str(s) for s in subjects] + ['all'])] # if subj=1, then ['1', 'all']
         self.metadata.reset_index(inplace=True, drop=True)
         
         self.context_transform = context_transform
@@ -347,11 +349,6 @@ class BrainAllDataset(Dataset):
         self.normalize = normalize
         self.data_type = data_type
         
-        # if self.data_type == 'roi':
-        #     f = h5py.File(f'/home/data/mindeyev2/betas_all_subj0{s}_fp32_renorm.hdf5', 'r')
-        #     betas = f['betas'][:]
-        #     betas = torch.Tensor(betas).to("cpu")
-                
         self.coco_data_path = "/home/dongho/brain2valence/data/emotic"
         
     def __len__(self):
@@ -392,7 +389,7 @@ class BrainAllDataset(Dataset):
         
         if self.data_type == 'roi' or self.data_type == 'emo_roi' or self.data_type == 'emo_vis_roi':
             if sample['shared1000']:
-                subj_rand_index = np.random.choice([1,2,5,7], 1)[0]
+                subj_rand_index = np.random.choice(self.subjects, 1)[0]
                 repeat_index = np.random.randint(3)
                 beta_idx = sample[f'subject{subj_rand_index}_rep{repeat_index}_beta_idx']
                 subj = f'subj0{subj_rand_index}'
