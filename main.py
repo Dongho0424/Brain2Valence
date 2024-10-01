@@ -25,7 +25,7 @@ def get_args():
     # ex) 240203_res18_mae_01_predict
     args.add_argument('--wandb-name', type=str, help='wandb name. if none, same with model_name')
     args.add_argument('--wandb-project', type=str, default='Brain2Valence', help='name of wandb project')
-    args.add_argument('--wandb-entity', type=str, default='beotborry', help='name of wandb entity')
+    args.add_argument('--wandb-entity', type=str, default='donghochoi', help='name of wandb entity')
 
     # execute options
     # model_name: model 저장 디렉토리 및 현재 모델의 개괄 설명 간단히

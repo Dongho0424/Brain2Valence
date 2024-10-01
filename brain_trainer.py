@@ -77,22 +77,23 @@ class BrainTrainer(EmoticTrainer):
             self.voxel_means = {}
             self.voxel_stds = {}
 
+            basedir = '/home/juhyeon/Brain2Valence'
             for s in [1, 2, 5, 7]:
                 if self.args.data == 'roi':
-                    betas = np.load(f'vis_subj{s}_all_beta.npy')
+                    betas = np.load(os.path.join(basedir, f'vis_subj{s}_all_beta.npy'))
                     betas = torch.tensor(betas).to("cpu").to(torch.float16)
-                    mean = np.load(f'vis_subj{s}_train_beta_mean.npy')
-                    std = np.load(f'vis_subj{s}_train_beta_std.npy')
+                    mean = np.load(os.path.join(basedir, f'vis_subj{s}_train_beta_mean.npy'))
+                    std = np.load(os.path.join(basedir, f'vis_subj{s}_train_beta_std.npy'))
                 elif self.args.data == 'emo_roi':
-                    betas = np.load(f'emo_subj{s}_all_beta.npy')
+                    betas = np.load(os.path.join(basedir, f'emo_subj{s}_all_beta.npy'))
                     betas = torch.tensor(betas).to("cpu").to(torch.float16)
-                    mean = np.load(f'emo_subj{s}_train_beta_mean.npy')
-                    std = np.load(f'emo_subj{s}_train_beta_std.npy')
+                    mean = np.load(os.path.join(basedir, f'emo_subj{s}_train_beta_mean.npy'))
+                    std = np.load(os.path.join(basedir, f'emo_subj{s}_train_beta_std.npy'))
                 elif self.args.data == 'emo_vis_roi':
-                    betas = np.load(f'emo_vis_subj{s}_all_beta.npy')
+                    betas = np.load(os.path.join(basedir, f'emo_vis_subj{s}_all_beta.npy'))
                     betas = torch.tensor(betas).to("cpu").to(torch.float16)
-                    mean = np.load(f'emo_vis_subj{s}_train_beta_mean.npy')
-                    std = np.load(f'emo_vis_subj{s}_train_beta_std.npy')
+                    mean = np.load(os.path.join(basedir, f'emo_vis_subj{s}_train_beta_mean.npy'))
+                    std = np.load(os.path.join(basedir, f'emo_vis_subj{s}_train_beta_std.npy'))
                     
                 self.num_voxels[f'subj0{s}'] = betas.shape[1]
                 self.voxels[f'subj0{s}'] = betas
