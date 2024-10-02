@@ -31,7 +31,6 @@ class BrainPredictor():
         print("wandb_config:\n",wandb_config)
         wandb_name = self.args.wandb_name if self.args.wandb_name != None else self.args.model_name
         wandb.init(
-            id=self.args.model_name,
             entity=self.args.wandb_entity,
             project=wandb_project,
             name=wandb_name,

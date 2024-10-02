@@ -34,7 +34,6 @@ class EmoticPredictor:
         wandb_name = self.args.wandb_name if self.args.wandb_name != None else self.args.model_name
 
         wandb.init(
-            id=self.args.model_name,
             entity=self.args.wandb_entity,
             project=wandb_project,
             name=wandb_name,
@@ -168,14 +167,14 @@ class EmoticPredictor:
 
         # evaluation for categorical emotion
         ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(26)]
-        ap_mean = np.mean(ap_scores)
+        mAP = np.mean(ap_scores)
 
-        if self.args.wandb_log: wandb.log({"AP_mean": ap_mean})
+        if self.args.wandb_log: wandb.log({"mAP": mAP})
         
         _, idx2cat = utils.get_emotic_categories()
         # for i, ap in enumerate(ap_scores):
             # print(f"AP for {i}. {idx2cat[i]}: {ap:.4f}")
-        print(f"{self.args.lr} model; AP_mean: {ap_mean}")
+        print(f"{self.args.lr} model; mAP: {mAP}")
 
         # plot AP per category
         plt.figure(figsize=(10, 8))
