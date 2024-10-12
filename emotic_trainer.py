@@ -45,6 +45,8 @@ class EmoticTrainer:
 
         wandb_name = self.args.wandb_name if self.args.wandb_name != None else self.args.model_name
         wandb.init(
+            id=self.args.model_name,
+            resume='allow',
             entity=self.args.wandb_entity,
             project=wandb_project,
             name=wandb_name,
