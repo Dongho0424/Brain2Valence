@@ -97,6 +97,7 @@ class EmoticTrainer:
                                       context_transform=train_context_transform,
                                       body_transform=train_body_transform,
                                       normalize=True,
+                                      dataset_ver=self.args.dataset_ver
                                       )
 
         val_dataset = EmoticDataset(data_path=data_path,
@@ -105,6 +106,7 @@ class EmoticTrainer:
                                     context_transform=test_context_transform,
                                     body_transform=test_body_transform,
                                     normalize=True,
+                                    dataset_ver=self.args.dataset_ver
                                     )
 
         train_dl = DataLoader(train_dataset, batch_size=self.args.batch_size, shuffle=True)
@@ -131,6 +133,7 @@ class EmoticTrainer:
                                       context_transform=train_context_transform,
                                       body_transform=train_body_transform,
                                       normalize=True,
+                                      dataset_ver=self.args.dataset_ver
                                       )
 
         val_dataset = EmoticDataset(data_path=data_path,
@@ -139,6 +142,7 @@ class EmoticTrainer:
                                     context_transform=test_context_transform,
                                     body_transform=test_body_transform,
                                     normalize=True,
+                                    dataset_ver=self.args.dataset_ver
                                     )
 
         train_dl = DataLoader(train_dataset, batch_size=self.args.batch_size, shuffle=True)

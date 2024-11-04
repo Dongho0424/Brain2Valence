@@ -281,6 +281,7 @@ class EmoticDataset(Dataset):
                  context_transform=None,
                  body_transform=None,
                  normalize=False,
+                 dataset_ver=2, # default 2
                  ):
 
         self.data_path = data_path
@@ -289,6 +290,7 @@ class EmoticDataset(Dataset):
         self.context_transform = context_transform
         self.body_transform = body_transform
         self.normalize = normalize
+        self.dataset_ver = dataset_ver
 
     def __len__(self):
         return len(self.metadata)
@@ -301,8 +303,10 @@ class EmoticDataset(Dataset):
         
         # crop body from image
         # using bbox
-        # bbox = literal_eval(sample['bbox'])
-        bbox = sample['bbox']
+        if self.dataset_ver == 2:
+            bbox = literal_eval(sample['bbox'])
+        else:
+            bbox = sample['bbox']
         body_image = context_image.crop((bbox[0], bbox[1], bbox[2], bbox[3]))
 
         # use transform
@@ -320,10 +324,12 @@ class EmoticDataset(Dataset):
 
         # get category label torch.tensor
         cat_label = torch.zeros(26)
-        # for cat in literal_eval(sample['category']):
-        #     cat_label[int(cat)] = 1
-        for cat in  sample['category']:
-            cat_label[cat] = 1
+        if self.dataset_ver == 2:
+            for cat in literal_eval(sample['category']):
+                cat_label[int(cat)] = 1
+        else:
+            for cat in  sample['category']:
+                cat_label[cat] = 1
 
         return context_image, body_image, valence, arousal, dominance, cat_label
 

@@ -79,6 +79,7 @@ class EmoticPredictor:
                                     context_transform=test_context_transform,
                                     body_transform=test_body_transform,
                                     normalize=True,
+                                    dataset_ver=self.args.dataset_ver
                                     )
 
         # always batch size is 1
@@ -104,6 +105,7 @@ class EmoticPredictor:
                                     context_transform=test_context_transform,
                                     body_transform=test_body_transform,
                                     normalize=True,
+                                    dataset_ver=self.args.dataset_ver
                                     )
 
         # always batch size is 1
@@ -172,6 +174,7 @@ class EmoticPredictor:
         mAP = np.mean(ap_scores)
 
         if self.args.wandb_log: wandb.log({"mAP": mAP})
+        # if self.args.wandb_log: wandb.log({"all_subj_mAP": mAP}) # temporarily using testset shown to all subject 
         
         _, idx2cat = utils.get_emotic_categories()
         # for i, ap in enumerate(ap_scores):
