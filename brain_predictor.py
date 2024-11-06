@@ -57,32 +57,37 @@ class BrainPredictor():
                 normalize=True,
             )
 
-            self.voxels = {}
+            # self.voxels = {}
             self.num_voxels = {}
             self.voxel_means = {}
             self.voxel_stds = {}
-            
-            basedir = '/home/juhyeon/Brain2Valence'
+            self.voxel_paths = {}
 
             for s in self.subjects:
                 if self.args.data == 'roi':
-                    betas = np.load(os.path.join(basedir, f'vis_subj{s}_all_beta.npy'))
-                    betas = torch.tensor(betas).to("cpu").to(torch.float16)
+                    basedir = '~/data/vis'
+                    # betas = np.load(os.path.join(basedir, f'vis_subj{s}_all_beta.npy'))
+                    # betas = torch.tensor(betas).to("cpu").to(torch.float16)
                     mean = np.load(os.path.join(basedir, f'vis_subj{s}_train_beta_mean.npy'))
                     std = np.load(os.path.join(basedir, f'vis_subj{s}_train_beta_std.npy'))
+                    self.voxel_paths[f'subj0{s}'] = os.path.join(basedir, f'vis_subj{s}_all_beta')
                 elif self.args.data == 'emo_roi':
-                    betas = np.load(os.path.join(basedir, f'emo_subj{s}_all_beta.npy'))
-                    betas = torch.tensor(betas).to("cpu").to(torch.float16)
+                    basedir = '~/data/emo'
+                    # betas = np.load(os.path.join(basedir, f'emo_subj{s}_all_beta.npy'))
+                    # betas = torch.tensor(betas).to("cpu").to(torch.float16)
                     mean = np.load(os.path.join(basedir, f'emo_subj{s}_train_beta_mean.npy'))
                     std = np.load(os.path.join(basedir, f'emo_subj{s}_train_beta_std.npy'))
+                    self.voxel_paths[f'subj0{s}'] = os.path.join(basedir, f'emo_subj{s}_all_beta')
                 elif self.args.data == 'emo_vis_roi':
-                    betas = np.load(os.path.join(basedir, f'emo_vis_subj{s}_all_beta.npy'))
-                    betas = torch.tensor(betas).to("cpu").to(torch.float16)
+                    basedir = '~/data/emo_vis'
+                    # betas = np.load(os.path.join(basedir, f'emo_vis_subj{s}_all_beta.npy'))
+                    # betas = torch.tensor(betas).to("cpu").to(torch.float16)
                     mean = np.load(os.path.join(basedir, f'emo_vis_subj{s}_train_beta_mean.npy'))
                     std = np.load(os.path.join(basedir, f'emo_vis_subj{s}_train_beta_std.npy'))
+                    self.voxel_paths[f'subj0{s}'] = os.path.join(basedir, f'emo_vis_subj{s}_all_beta')
                     
-                self.num_voxels[f'subj0{s}'] = betas.shape[1]
-                self.voxels[f'subj0{s}'] = betas
+                self.num_voxels[f'subj0{s}'] = mean.shape[0]
+                # self.voxels[f'subj0{s}'] = betas
                 self.voxel_means[f'subj0{s}'] = mean
                 self.voxel_stds[f'subj0{s}'] = std
 
@@ -160,7 +165,10 @@ class BrainPredictor():
                     subj, beta_idx = brain_data
                     brain_data = []
                     for s, b in zip(subj, beta_idx):
-                        v = torch.tensor(self.voxels[s][b]).unsqueeze(0).float().cuda()
+                        # v = torch.tensor(self.voxels[s][b]).unsqueeze(0).float().cuda()
+                        v = np.load(os.path.join(self.voxel_paths[s], f"{self.voxel_paths[s]}_idx{beta_idx}.npy"))
+                        assert(v.shape[0] == self.num_voxels[s])
+                        v = torch.from_numpy(v).unsqueeze(0).float().cuda()
                         v = (v - torch.tensor(self.voxel_means[s]).float().cuda()) / torch.tensor(self.voxel_stds[s]).float().cuda()
                         brain_data.append(self.max_pool(v))
                     brain_data = torch.stack(brain_data).cuda().squeeze(1)
