@@ -342,12 +342,14 @@ class BrainDataset2(Dataset):
                  body_transform=None,
                  normalize=False,
                  ):
-        self.metadata = pd.read_csv('emotic_nsd_joint_metadata.csv')
+        self.metadata = pd.read_csv('emotic_nsd_joint_metadata_split.csv')
         self.subjects = subjects
         self.split = split
         
         self.metadata = self.metadata[self.metadata['emotic_split'] == split]
-        self.metadata = self.metadata[self.metadata['subject'].isin([str(s) for s in subjects] + ['all'])] # if subj=1, then ['1', 'all']
+        # if subj=1, then ['1', 'all_1']
+        # if subj=1 or 2, then ['1', '2', 'all_1', 'all_2']
+        self.metadata = self.metadata[self.metadata['subject'].isin([f"{s}" for s in subjects] + [f"all_{s}" for s in subjects])] 
         self.metadata.reset_index(inplace=True, drop=True)
         
         self.context_transform = context_transform
@@ -387,24 +389,17 @@ class BrainDataset2(Dataset):
         cat_label = torch.zeros(26)
 
         for cat in literal_eval(sample['category']):
-            cat_label[int(cat)] = 1
-
-        # Because there are 3 snapshots of both brain3d and roi
-        # repeat_index = np.random.randint(3) 
-        data = None     
+            cat_label[int(cat)] = 1 
         
         if self.data_type == 'roi' or self.data_type == 'emo_roi' or self.data_type == 'emo_vis_roi':
-            if sample['shared1000']:
-                subj_rand_index = np.random.choice(self.subjects, 1)[0]
-                repeat_index = np.random.randint(3)
-                beta_idx = sample[f'subject{subj_rand_index}_rep{repeat_index}_beta_idx']
-                subj = f'subj0{subj_rand_index}'
-            else:
-                # find subject whose sample[f'subject{1~8}_rep{repeat_index}_beta_idx'] is not -1
-                sub_idx = int(sample['subject'])
-                repeat_index = np.random.randint(3)
-                beta_idx = sample[f'subject{sub_idx}_rep{repeat_index}_beta_idx']
-                subj = f'subj0{sub_idx}'
+            # find subject whose sample[f'subject{1~8}_rep{repeat_index}_beta_idx'] is not -1
+            # sample['subject'] can be either 'n' or 'all_n'. 
+            # Extract n from it.
+            sub_idx = sample['subject'].str.extract(r'(\d+)').astype(int)
+            assert sub_idx in range(1, 9)
+            repeat_index = np.random.randint(3)
+            beta_idx = sample[f'subject{sub_idx}_rep{repeat_index}_beta_idx']
+            subj = f'subj0{sub_idx}'
                 
         return context_image, body_image, valence, arousal, dominance, cat_label, (subj, beta_idx)
 
