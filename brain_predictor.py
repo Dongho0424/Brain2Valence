@@ -62,29 +62,24 @@ class BrainPredictor():
             self.voxel_means = {}
             self.voxel_stds = {}
             self.voxel_paths = {}
+            basedir = '/home/dongho/brain2valence/data'
 
             for s in self.subjects:
                 if self.args.data == 'roi':
-                    basedir = '~/data/vis'
-                    # betas = np.load(os.path.join(basedir, f'vis_subj{s}_all_beta.npy'))
-                    # betas = torch.tensor(betas).to("cpu").to(torch.float16)
-                    mean = np.load(os.path.join(basedir, f'vis_subj{s}_train_beta_mean.npy'))
-                    std = np.load(os.path.join(basedir, f'vis_subj{s}_train_beta_std.npy'))
-                    self.voxel_paths[f'subj0{s}'] = os.path.join(basedir, f'vis_subj{s}_all_beta')
+                    subdir = os.path.join(basedir, f'vis')
+                    mean = np.load(os.path.join(subdir, f'vis_subj{s}_train_beta_mean.npy'))
+                    std = np.load(os.path.join(subdir, f'vis_subj{s}_train_beta_std.npy'))
+                    self.voxel_paths[f'subj0{s}'] = os.path.join(subdir, f'vis_subj{s}_all_beta')
                 elif self.args.data == 'emo_roi':
-                    basedir = '~/data/emo'
-                    # betas = np.load(os.path.join(basedir, f'emo_subj{s}_all_beta.npy'))
-                    # betas = torch.tensor(betas).to("cpu").to(torch.float16)
-                    mean = np.load(os.path.join(basedir, f'emo_subj{s}_train_beta_mean.npy'))
-                    std = np.load(os.path.join(basedir, f'emo_subj{s}_train_beta_std.npy'))
-                    self.voxel_paths[f'subj0{s}'] = os.path.join(basedir, f'emo_subj{s}_all_beta')
+                    subdir = os.path.join(basedir, f'emo')
+                    mean = np.load(os.path.join(subdir, f'emo_subj{s}_train_beta_mean.npy'))
+                    std = np.load(os.path.join(subdir, f'emo_subj{s}_train_beta_std.npy'))
+                    self.voxel_paths[f'subj0{s}'] = os.path.join(subdir, f'emo_subj{s}_all_beta')
                 elif self.args.data == 'emo_vis_roi':
-                    basedir = '~/data/emo_vis'
-                    # betas = np.load(os.path.join(basedir, f'emo_vis_subj{s}_all_beta.npy'))
-                    # betas = torch.tensor(betas).to("cpu").to(torch.float16)
-                    mean = np.load(os.path.join(basedir, f'emo_vis_subj{s}_train_beta_mean.npy'))
-                    std = np.load(os.path.join(basedir, f'emo_vis_subj{s}_train_beta_std.npy'))
-                    self.voxel_paths[f'subj0{s}'] = os.path.join(basedir, f'emo_vis_subj{s}_all_beta')
+                    subdir = os.path.join(basedir, f'emo_vis')
+                    mean = np.load(os.path.join(subdir, f'emo_vis_subj{s}_train_beta_mean.npy'))
+                    std = np.load(os.path.join(subdir, f'emo_vis_subj{s}_train_beta_std.npy'))
+                    self.voxel_paths[f'subj0{s}'] = os.path.join(subdir, f'emo_vis_subj{s}_all_beta')
                     
                 self.num_voxels[f'subj0{s}'] = mean.shape[0]
                 # self.voxels[f'subj0{s}'] = betas
@@ -165,8 +160,7 @@ class BrainPredictor():
                     subj, beta_idx = brain_data
                     brain_data = []
                     for s, b in zip(subj, beta_idx):
-                        # v = torch.tensor(self.voxels[s][b]).unsqueeze(0).float().cuda()
-                        v = np.load(os.path.join(self.voxel_paths[s], f"{self.voxel_paths[s]}_idx{beta_idx}.npy"))
+                        v = np.load(os.path.join(self.voxel_paths[s], f"idx{b}.npy"))
                         assert(v.shape[0] == self.num_voxels[s])
                         v = torch.from_numpy(v).unsqueeze(0).float().cuda()
                         v = (v - torch.tensor(self.voxel_means[s]).float().cuda()) / torch.tensor(self.voxel_stds[s]).float().cuda()
@@ -226,16 +220,17 @@ class BrainPredictor():
             print("valence mae: {:.4f}, arousal mae: {:.4f}, dominance mae: {:.4f}, total mae: {:.4f}".format(v_mae, a_mae, d_mae, total_mae))
             print("valence corr: {:.4f}, arousal corr: {:.4f}, dominance corr: {:.4f} ".format(v_corr, a_corr, d_corr))
             
-            wandb.log({"valence_mae": v_mae, "arousal_mae": a_mae, "dominance_mae": d_mae, "total_mae": total_mae})
-            wandb.log({"valence_corr": v_corr, "arousal_corr": a_corr, "dominance_corr": d_corr})
+            if self.args.wandb_log:
+                wandb.log({"valence_mae": v_mae, "arousal_mae": a_mae, "dominance_mae": d_mae, "total_mae": total_mae})
+                wandb.log({"valence_corr": v_corr, "arousal_corr": a_corr, "dominance_corr": d_corr})
 
-            for index, vad in enumerate(['valence', 'arousal', 'dominance']):
-                # Plot true vs pred valence 
-                plt.scatter(gt_vads[:, index], pred_vads[:, index], alpha=0.2)
-                plt.xlabel(f"True {vad}")
-                plt.ylabel(f"Pred {vad}")
-                plt.plot([0, 1], [0, 1], color='red', linestyle='--')
+                for index, vad in enumerate(['valence', 'arousal', 'dominance']):
+                    # Plot true vs pred valence 
+                    plt.scatter(gt_vads[:, index], pred_vads[:, index], alpha=0.2)
+                    plt.xlabel(f"True {vad}")
+                    plt.ylabel(f"Pred {vad}")
+                    plt.plot([0, 1], [0, 1], color='red', linestyle='--')
                         
-                wandb.log({f"plot true {vad} vs pred {vad}": wandb.Image(plt)})
-                plt.clf()
-        
+                    wandb.log({f"plot true {vad} vs pred {vad}": wandb.Image(plt)})
+                    plt.clf()
+            

@@ -10,6 +10,7 @@ from sklearn.model_selection import train_test_split
 import utils
 import h5py
 from ast import literal_eval
+import re
 
 class BrainValenceDataset(Dataset):
     def __init__(self,
@@ -342,10 +343,12 @@ class BrainDataset2(Dataset):
                  body_transform=None,
                  normalize=False,
                  ):
-        self.metadata = pd.read_csv('emotic_nsd_joint_metadata_split.csv')
+        self.metadata = pd.read_csv('/home/dongho/brain2valence/emotic_nsd_joint_metadata_split.csv', dtype={'subject': str})
         self.subjects = subjects
         self.split = split
         
+        print("Emotic Split: ", split)
+        print("Subjects: ", subjects)
         self.metadata = self.metadata[self.metadata['emotic_split'] == split]
         # if subj=1, then ['1', 'all_1']
         # if subj=1 or 2, then ['1', '2', 'all_1', 'all_2']
@@ -395,7 +398,7 @@ class BrainDataset2(Dataset):
             # find subject whose sample[f'subject{1~8}_rep{repeat_index}_beta_idx'] is not -1
             # sample['subject'] can be either 'n' or 'all_n'. 
             # Extract n from it.
-            sub_idx = sample['subject'].str.extract(r'(\d+)').astype(int)
+            sub_idx = int(re.search(r'(\d+)', sample['subject']).group(1))
             assert sub_idx in range(1, 9)
             repeat_index = np.random.randint(3)
             beta_idx = sample[f'subject{sub_idx}_rep{repeat_index}_beta_idx']

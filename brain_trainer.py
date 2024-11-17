@@ -53,29 +53,24 @@ class BrainTrainer(EmoticTrainer):
             self.voxel_means = {}
             self.voxel_stds = {}
             self.voxel_paths = {}
+            basedir = '/home/dongho/brain2valence/data'
 
             for s in self.subjects:
                 if self.args.data == 'roi':
-                    basedir = '~/data/vis'
-                    # betas = np.load(os.path.join(basedir, f'vis_subj{s}_all_beta.npy'))
-                    # betas = torch.tensor(betas).to("cpu").to(torch.float16)
-                    mean = np.load(os.path.join(basedir, f'vis_subj{s}_train_beta_mean.npy'))
-                    std = np.load(os.path.join(basedir, f'vis_subj{s}_train_beta_std.npy'))
-                    self.voxel_paths[f'subj0{s}'] = os.path.join(basedir, f'vis_subj{s}_all_beta')
+                    subdir = os.path.join(basedir, f'vis')
+                    mean = np.load(os.path.join(subdir, f'vis_subj{s}_train_beta_mean.npy'))
+                    std = np.load(os.path.join(subdir, f'vis_subj{s}_train_beta_std.npy'))
+                    self.voxel_paths[f'subj0{s}'] = os.path.join(subdir, f'vis_subj{s}_all_beta')
                 elif self.args.data == 'emo_roi':
-                    basedir = '~/data/emo'
-                    # betas = np.load(os.path.join(basedir, f'emo_subj{s}_all_beta.npy'))
-                    # betas = torch.tensor(betas).to("cpu").to(torch.float16)
-                    mean = np.load(os.path.join(basedir, f'emo_subj{s}_train_beta_mean.npy'))
-                    std = np.load(os.path.join(basedir, f'emo_subj{s}_train_beta_std.npy'))
-                    self.voxel_paths[f'subj0{s}'] = os.path.join(basedir, f'emo_subj{s}_all_beta')
+                    subdir = os.path.join(basedir, f'emo')
+                    mean = np.load(os.path.join(subdir, f'emo_subj{s}_train_beta_mean.npy'))
+                    std = np.load(os.path.join(subdir, f'emo_subj{s}_train_beta_std.npy'))
+                    self.voxel_paths[f'subj0{s}'] = os.path.join(subdir, f'emo_subj{s}_all_beta')
                 elif self.args.data == 'emo_vis_roi':
-                    basedir = '~/data/emo_vis'
-                    # betas = np.load(os.path.join(basedir, f'emo_vis_subj{s}_all_beta.npy'))
-                    # betas = torch.tensor(betas).to("cpu").to(torch.float16)
-                    mean = np.load(os.path.join(basedir, f'emo_vis_subj{s}_train_beta_mean.npy'))
-                    std = np.load(os.path.join(basedir, f'emo_vis_subj{s}_train_beta_std.npy'))
-                    self.voxel_paths[f'subj0{s}'] = os.path.join(basedir, f'emo_vis_subj{s}_all_beta')
+                    subdir = os.path.join(basedir, f'emo_vis')
+                    mean = np.load(os.path.join(subdir, f'emo_vis_subj{s}_train_beta_mean.npy'))
+                    std = np.load(os.path.join(subdir, f'emo_vis_subj{s}_train_beta_std.npy'))
+                    self.voxel_paths[f'subj0{s}'] = os.path.join(subdir, f'emo_vis_subj{s}_all_beta')
                     
                 self.num_voxels[f'subj0{s}'] = mean.shape[0]
                 # self.voxels[f'subj0{s}'] = betas
@@ -156,8 +151,7 @@ class BrainTrainer(EmoticTrainer):
                     subj, beta_idx = brain_data
                     brain_data = []
                     for s, b in zip(subj, beta_idx):
-                        # v = torch.tensor(self.voxels[s][b]).unsqueeze(0).float().cuda()
-                        v = np.load(os.path.join(self.voxel_paths[s], f"{self.voxel_paths[s]}_idx{beta_idx}.npy"))
+                        v = np.load(os.path.join(self.voxel_paths[s], f"idx{b}.npy"))
                         assert(v.shape[0] == self.num_voxels[s])
                         v = torch.from_numpy(v).unsqueeze(0).float().cuda()
                         v = (v - torch.tensor(self.voxel_means[s]).float().cuda()) / torch.tensor(self.voxel_stds[s]).float().cuda()
@@ -194,9 +188,10 @@ class BrainTrainer(EmoticTrainer):
 
             train_loss /= self.num_train
 
-            wandb.log(
-                {"train_loss": train_loss,
-                 "lr": self.optimizer.param_groups[0]['lr']}, step=epoch)
+            if self.args.wandb_log:
+                wandb.log(
+                    {"train_loss": train_loss,
+                    "lr": self.optimizer.param_groups[0]['lr']}, step=epoch)
 
             self.model.eval()
             val_loss = 0
@@ -214,8 +209,7 @@ class BrainTrainer(EmoticTrainer):
                         subj, beta_idx = brain_data
                         brain_data = []
                         for s, b in zip(subj, beta_idx):
-                            # v = torch.tensor(self.voxels[s][b]).unsqueeze(0).float().cuda()
-                            v = np.load(os.path.join(self.voxel_paths[s], f"{self.voxel_paths[s]}_idx{beta_idx}.npy"))
+                            v = np.load(os.path.join(self.voxel_paths[s], f"idx{b}.npy"))
                             assert(v.shape[0] == self.num_voxels[s])
                             v = torch.from_numpy(v).unsqueeze(0).float().cuda()
                             v = (v - torch.tensor(self.voxel_means[s]).float().cuda()) / torch.tensor(self.voxel_stds[s]).float().cuda()
@@ -244,7 +238,7 @@ class BrainTrainer(EmoticTrainer):
                         val_loss += loss.item()
                 
                 val_loss /= self.num_val
-                wandb.log({"val_loss": val_loss}, step=epoch)
+                if self.args.wandb_log: wandb.log({"val_loss": val_loss}, step=epoch)
 
                 # evaluation for categorical emotion
 
@@ -253,17 +247,17 @@ class BrainTrainer(EmoticTrainer):
 
                 ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(26)]
                 mAP = np.mean(ap_scores)
-                wandb.log({"val_mAP": mAP}, step=epoch)
+                if self.args.wandb_log: wandb.log({"val_mAP": mAP}, step=epoch)
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 print ('saving model at epoch: %d' %(epoch))
-                wandb.log({"best_val_loss": best_val_loss}, step=epoch)
+                if self.args.wandb_log: wandb.log({"best_val_loss": best_val_loss}, step=epoch)
                 self.save_model(self.args, self.model, best=True)
 
             if mAP > best_val_mAP:
                 best_val_mAP = mAP
-                wandb.log({"best_val_mAP": mAP}, step=epoch)
+                if self.args.wandb_log: wandb.log({"best_val_mAP": mAP}, step=epoch)
 
             self.scheduler.step()
 
