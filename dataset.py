@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 import numpy as np
 import os
 import pandas as pd
@@ -338,7 +339,8 @@ class BrainDataset2(Dataset):
     def __init__(self,
                  subjects,
                  split,
-                 data_type='brain3d',
+                 data_type='roi',
+                 pool_num=2048,
                  context_transform=None,
                  body_transform=None,
                  normalize=False,
@@ -349,6 +351,7 @@ class BrainDataset2(Dataset):
         
         print("Emotic Split: ", split)
         print("Subjects: ", subjects)
+        print("Pool Num: ", pool_num)
         self.metadata = self.metadata[self.metadata['emotic_split'] == split]
         # if subj=1, then ['1', 'all_1']
         # if subj=1 or 2, then ['1', '2', 'all_1', 'all_2']
@@ -357,10 +360,38 @@ class BrainDataset2(Dataset):
         
         self.context_transform = context_transform
         self.body_transform = body_transform
+        self.pool_num = pool_num
         self.normalize = normalize
         self.data_type = data_type
-        
+        assert data_type in ['roi', 'emo_roi', 'emo_vis_roi'], "data_type should be either 'roi', 'emo_roi', or 'emo_vis_roi'"
         self.coco_data_path = "/home/dongho/brain2valence/data/emotic"
+
+        self.num_voxels = {}
+        self.voxel_means = {}
+        self.voxel_stds = {}
+        self.voxel_paths = {}
+        basedir = '/home/dongho/brain2valence/data'
+
+        for s in self.subjects:
+            if data_type == 'roi':
+                subdir = os.path.join(basedir, f'vis')
+                mean = np.load(os.path.join(subdir, f'vis_subj{s}_train_beta_mean.npy'))
+                std = np.load(os.path.join(subdir, f'vis_subj{s}_train_beta_std.npy'))
+                self.voxel_paths[f'subj{s}'] = os.path.join(subdir, f'vis_subj{s}_all_beta')
+            elif data_type == 'emo_roi':
+                subdir = os.path.join(basedir, f'emo')
+                mean = np.load(os.path.join(subdir, f'emo_subj{s}_train_beta_mean.npy'))
+                std = np.load(os.path.join(subdir, f'emo_subj{s}_train_beta_std.npy'))
+                self.voxel_paths[f'subj{s}'] = os.path.join(subdir, f'emo_subj{s}_all_beta')
+            elif data_type == 'emo_vis_roi':
+                subdir = os.path.join(basedir, f'emo_vis')
+                mean = np.load(os.path.join(subdir, f'emo_vis_subj{s}_train_beta_mean.npy'))
+                std = np.load(os.path.join(subdir, f'emo_vis_subj{s}_train_beta_std.npy'))
+                self.voxel_paths[f'subj{s}'] = os.path.join(subdir, f'emo_vis_subj{s}_all_beta')
+                
+            self.num_voxels[f'subj{s}'] = mean.shape[0]
+            self.voxel_means[f'subj{s}'] = mean
+            self.voxel_stds[f'subj{s}'] = std
         
     def __len__(self):
         return len(self.metadata)
@@ -394,17 +425,21 @@ class BrainDataset2(Dataset):
         for cat in literal_eval(sample['category']):
             cat_label[int(cat)] = 1 
         
-        if self.data_type == 'roi' or self.data_type == 'emo_roi' or self.data_type == 'emo_vis_roi':
-            # find subject whose sample[f'subject{1~8}_rep{repeat_index}_beta_idx'] is not -1
-            # sample['subject'] can be either 'n' or 'all_n'. 
-            # Extract n from it.
-            sub_idx = int(re.search(r'(\d+)', sample['subject']).group(1))
-            assert sub_idx in range(1, 9)
-            repeat_index = np.random.randint(3)
-            beta_idx = sample[f'subject{sub_idx}_rep{repeat_index}_beta_idx']
-            subj = f'subj0{sub_idx}'
+        # find subject whose sample[f'subject{1~8}_rep{repeat_index}_beta_idx'] is not -1
+        # sample['subject'] can be either 'n' or 'all_n'. 
+        # Extract n from it.
+        sub_idx = int(re.search(r'(\d+)', sample['subject']).group(1))
+        assert sub_idx in range(1, 9)
+        repeat_index = np.random.randint(3)
+        beta_idx = sample[f'subject{sub_idx}_rep{repeat_index}_beta_idx']
+        subj = f'subj{sub_idx}'
+
+        voxel_path = np.load(os.path.join(self.voxel_paths[subj], f"idx{beta_idx}.npy"))
+        voxel = torch.from_numpy(voxel_path).unsqueeze(0)
+        voxel = (voxel - torch.tensor(self.voxel_means[subj])) / torch.tensor(self.voxel_stds[subj])
+        brain_data = F.adaptive_max_pool1d(voxel, self.pool_num).squeeze(0)
                 
-        return context_image, body_image, valence, arousal, dominance, cat_label, (subj, beta_idx)
+        return context_image, body_image, valence, arousal, dominance, cat_label, brain_data
 
         
 class BrainDataset(Dataset):

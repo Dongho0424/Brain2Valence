@@ -8,27 +8,26 @@ wd=0.01
 pretrained_wgt_path=./trained_models/EMOTIC_pretrained_img_extractor_weight/best_model.pth
 all_subjects="1 2 5 7"
 
-# DONGHO=" --wandb-project dataset_v2 --wandb-entity donghochoi --wandb-log --dataset-ver 2 --optimizer adamw --scheduler cosine --criterion emotic_SL1 --cat-criterion ${cat_loss}"
-DONGHO=" --wandb-project dataset_v2 --wandb-entity donghochoi --dataset-ver 2 --optimizer adamw --scheduler cosine --criterion emotic_SL1 --cat-criterion ${cat_loss}"
+DONGHO=" --wandb-project v2_revised --wandb-entity donghochoi --wandb-log --dataset-ver 2 --optimizer adamw --scheduler cosine --criterion emotic_SL1 --cat-criterion ${cat_loss}"
 
 ## scratch ##
 ## scratch ##
 
-# for lr in 1e-5 3e-5 5e-5 1e-4 3e-4 5e-4 5e-6 8e-6 
-# do
-#     for subj in 1 2 5 7 "$all_subjects"
-#     do
-#         for pn in 1024 2048 4096
-for lr in 1e-5 #3e-5 5e-5 1e-4 3e-4 5e-4 5e-6 8e-6 
+for lr in 1e-5 3e-5 5e-5 1e-4 3e-4 5e-4 8e-6 #5e-6  
 do
     for subj in 1 #2 5 7 "$all_subjects"
     do
-        for pn in 1024 #2048 4096
+        for pn in 1024 2048 4096
         do
             if [ "$subj" == "$all_subjects" ]; then
-                model_name="vis_roi_scratch_lr_${lr}_subj_1257_bs_52_pn_${pn}_ep_50_"
+                model_name="vis_roi_scratch_lr_${lr}_subj_1257_bs_52_pn_${pn}_ep_50"
             else
-                model_name="vis_roi_scratch_lr_${lr}_subj_${subj}_bs_52_pn_${pn}_ep_50_"
+                model_name="vis_roi_scratch_lr_${lr}_subj_${subj}_bs_52_pn_${pn}_ep_50"
+            fi
+            if [ "$subj" == "$all_subjects" ]; then
+                model_name="vis_roi_scratch_lr_${lr}_subj_1257_bs_52_pn_${pn}_ep_50"
+            else
+                model_name="vis_roi_scratch_lr_${lr}_subj_${subj}_bs_52_pn_${pn}_ep_50"
             fi
 
             CUDA_VISIBLE_DEVICES=${device} python3 -W "ignore" main.py --exec_mode train --subj $subj \

@@ -36,6 +36,7 @@ class BrainTrainer(EmoticTrainer):
             train_dataset = BrainDataset2(subjects=self.subjects,
                                           split='train',
                                           data_type=self.args.data,
+                                          pool_num=self.args.pool_num,
                                           context_transform=train_context_transform,
                                           body_transform=train_body_transform,
                                           normalize=True,
@@ -44,38 +45,11 @@ class BrainTrainer(EmoticTrainer):
             val_dataset = BrainDataset2(subjects=self.subjects,
                                         split='val',
                                         data_type=self.args.data,
+                                        pool_num=self.args.pool_num,
                                         context_transform=test_context_transform,
                                         body_transform=test_body_transform,
                                         normalize=True,
                                         )
-            # self.voxels = {}
-            self.num_voxels = {}
-            self.voxel_means = {}
-            self.voxel_stds = {}
-            self.voxel_paths = {}
-            basedir = '/home/dongho/brain2valence/data'
-
-            for s in self.subjects:
-                if self.args.data == 'roi':
-                    subdir = os.path.join(basedir, f'vis')
-                    mean = np.load(os.path.join(subdir, f'vis_subj{s}_train_beta_mean.npy'))
-                    std = np.load(os.path.join(subdir, f'vis_subj{s}_train_beta_std.npy'))
-                    self.voxel_paths[f'subj0{s}'] = os.path.join(subdir, f'vis_subj{s}_all_beta')
-                elif self.args.data == 'emo_roi':
-                    subdir = os.path.join(basedir, f'emo')
-                    mean = np.load(os.path.join(subdir, f'emo_subj{s}_train_beta_mean.npy'))
-                    std = np.load(os.path.join(subdir, f'emo_subj{s}_train_beta_std.npy'))
-                    self.voxel_paths[f'subj0{s}'] = os.path.join(subdir, f'emo_subj{s}_all_beta')
-                elif self.args.data == 'emo_vis_roi':
-                    subdir = os.path.join(basedir, f'emo_vis')
-                    mean = np.load(os.path.join(subdir, f'emo_vis_subj{s}_train_beta_mean.npy'))
-                    std = np.load(os.path.join(subdir, f'emo_vis_subj{s}_train_beta_std.npy'))
-                    self.voxel_paths[f'subj0{s}'] = os.path.join(subdir, f'emo_vis_subj{s}_all_beta')
-                    
-                self.num_voxels[f'subj0{s}'] = mean.shape[0]
-                # self.voxels[f'subj0{s}'] = betas
-                self.voxel_means[f'subj0{s}'] = mean
-                self.voxel_stds[f'subj0{s}'] = std
 
         elif self.args.dataset_ver == 1:
             train_split = 'one_point' if self.args.one_point else 'train'
@@ -96,8 +70,20 @@ class BrainTrainer(EmoticTrainer):
                                     )
         else: raise ValueError('dataset_ver should be 1 or 2, who are you?')
 
-        train_dl = DataLoader(train_dataset, batch_size=self.args.batch_size, shuffle=True)
-        val_dl = DataLoader(val_dataset, batch_size=self.args.batch_size, shuffle=False)
+        train_dl = DataLoader(
+            train_dataset, 
+            batch_size=self.args.batch_size, 
+            shuffle=True,
+            num_workers=4,
+            pin_memory=True,
+        )
+        val_dl = DataLoader(
+            val_dataset, 
+            batch_size=self.args.batch_size, 
+            shuffle=False,
+            num_workers=4,
+            pin_memory=True,
+        )
         print('# train data:', len(train_dataset))
         print('# val data:', len(val_dataset))
 
@@ -120,7 +106,6 @@ class BrainTrainer(EmoticTrainer):
         )
 
         utils.print_model_info(model)
-        self.max_pool = nn.AdaptiveMaxPool1d(self.args.pool_num) 
 
         return model
     
@@ -146,19 +131,7 @@ class BrainTrainer(EmoticTrainer):
                 body_image = body_image.float().cuda()
                 gt_cat = category.float().cuda()
                 gt_vad = torch.stack([valence, arousal, dominance], dim=1).float().cuda()
-                
-                if self.args.dataset_ver == 2:
-                    subj, beta_idx = brain_data
-                    brain_data = []
-                    for s, b in zip(subj, beta_idx):
-                        v = np.load(os.path.join(self.voxel_paths[s], f"idx{b}.npy"))
-                        assert(v.shape[0] == self.num_voxels[s])
-                        v = torch.from_numpy(v).unsqueeze(0).float().cuda()
-                        v = (v - torch.tensor(self.voxel_means[s]).float().cuda()) / torch.tensor(self.voxel_stds[s]).float().cuda()
-                        brain_data.append(self.max_pool(v))
-                    brain_data = torch.stack(brain_data).cuda().squeeze(1)
-                elif self.args.dataset_ver == 1:
-                    brain_data = brain_data.float().cuda()
+                brain_data = brain_data.float().cuda()
                 
                 if self.args.cat_only: # only category
                     # brain_data: brain3d or roi
@@ -204,19 +177,7 @@ class BrainTrainer(EmoticTrainer):
                     body_image = body_image.float().cuda()
                     gt_cat = category.float().cuda()
                     gt_vad = torch.stack([valence, arousal, dominance], dim=1).float().cuda()
-                    
-                    if self.args.dataset_ver == 2:
-                        subj, beta_idx = brain_data
-                        brain_data = []
-                        for s, b in zip(subj, beta_idx):
-                            v = np.load(os.path.join(self.voxel_paths[s], f"idx{b}.npy"))
-                            assert(v.shape[0] == self.num_voxels[s])
-                            v = torch.from_numpy(v).unsqueeze(0).float().cuda()
-                            v = (v - torch.tensor(self.voxel_means[s]).float().cuda()) / torch.tensor(self.voxel_stds[s]).float().cuda()
-                            brain_data.append(self.max_pool(v))
-                        brain_data = torch.stack(brain_data).cuda().squeeze(1)
-                    elif self.args.dataset_ver == 1:
-                        brain_data = brain_data.float().cuda()
+                    brain_data = brain_data.float().cuda()
                     
                     if self.args.cat_only: # only category
                         # brain_data: brain3d or roi
