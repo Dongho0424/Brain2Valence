@@ -56,6 +56,9 @@ class BrainPredictor():
                 context_transform=test_context_transform,
                 body_transform=test_body_transform,
                 normalize=True,
+                exclude_least=self.args.exclude_least,
+                exclude_low=self.args.exclude_low,
+                exclude_strategy=self.args.exclude_strategy,
             )
 
         elif self.args.dataset_ver == 1:
@@ -76,6 +79,12 @@ class BrainPredictor():
         return test_dl, len(test_dataset)
     
     def load_model(self, args, use_best=True) -> nn.Module :
+        self.cat_num = 26
+        if self.args.exclude_least:
+            self.cat_num -= 3 # exclude 1, 17, 22
+        elif self.args.exclude_low:
+            self.cat_num -= 8 # exclude 1, 4, 6, 10, 15, 17, 20, 22
+
         model = BrainModel(
             image_backbone=self.args.image_backbone,
             image_model_type=self.args.model_type,
@@ -87,6 +96,7 @@ class BrainPredictor():
             subjects=self.subjects,
             backbone_freeze=self.args.backbone_freeze,
             cat_only=self.args.cat_only,
+            cat_num=self.cat_num,
             fusion_ver=self.args.fusion_ver
         )
         
@@ -113,8 +123,8 @@ class BrainPredictor():
         self.model.cuda()
         self.model.eval()
 
-        pred_cats = np.zeros((self.num_test, 26))
-        gt_cats = np.zeros((self.num_test, 26))
+        pred_cats = np.zeros((self.num_test, self.cat_num))
+        gt_cats = np.zeros((self.num_test, self.cat_num))
         pred_vads = np.zeros((self.num_test, 3))
         gt_vads = np.zeros((self.num_test, 3))
 
@@ -134,7 +144,7 @@ class BrainPredictor():
                     gt_cats[i, :] = gt_cat.cpu().numpy()
 
                 else: # category + VAD
-                    pred_cat, pred_vad = self.model(body_image, context_image, brain_data) # (1, 26), (1, 3)
+                    pred_cat, pred_vad = self.model(body_image, context_image, brain_data) # (1, cat_num), (1, 3)
 
                     pred_cats[i, :] = pred_cat.cpu().numpy()
                     gt_cats[i, :] = gt_cat.cpu().numpy()
@@ -142,7 +152,7 @@ class BrainPredictor():
                     gt_vads[i, :] = gt_vad.cpu().numpy()
 
         # evaluation for categorical emotion
-        ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(26)]
+        ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(self.cat_num)]
         mAP = np.mean(ap_scores)
 
         _, idx2cat = utils.get_emotic_categories()
@@ -154,7 +164,14 @@ class BrainPredictor():
         plt.figure(figsize=(10, 8))
         plt.title('Average Precision per category')
         plt.yscale('log')
-        plt.xticks(range(26), [f"{i}. {idx2cat[i]}" for i in range(26)], rotation=-90)
+        cat_list = list(range(26))
+        if self.args.exclude_least:
+            # exclude 1, 7, 22
+            cat_list = [c for c in cat_list if c not in [1, 17, 22]]
+        elif self.args.exclude_low:
+            # exclude 1, 4, 6, 10, 15, 17, 20, 22
+            cat_list = [c for c in cat_list if c not in [1, 4, 6, 10, 15, 17, 20, 22]]
+        plt.xticks(range(self.cat_num), [f"{i}. {idx2cat[i]}" for i in cat_list], rotation=-90)
         for i, ap in enumerate(ap_scores):
             plt.bar(i, ap)
             plt.text(i, ap, f'{ap:.4f}', ha='center', va='bottom')

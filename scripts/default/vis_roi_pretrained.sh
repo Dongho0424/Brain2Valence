@@ -1,4 +1,4 @@
-device=2
+device=0
 model_type=BI # fixed after this time
 # subj=1
 fusion_ver=1 # fixed
@@ -15,28 +15,28 @@ DONGHO=" --wandb-project v2_revised --wandb-entity donghochoi --wandb-log --data
 
 for lr in 1e-5 3e-5 5e-5 1e-4 3e-4 5e-4 8e-6 #5e-6  
 do
-    for subj in 1 #2 5 7 "$all_subjects"
+    for subj in 2 5 7 "$all_subjects" #1
     do
         for pn in 1024 2048 4096
         do
             if [ "$subj" == "$all_subjects" ]; then
-                model_name="emo_vis_roi_pretrained_lr_${lr}_subj_1257_bs_52_pn_${pn}_ep_50"
+                model_name="vis_roi_pretrained_lr_${lr}_subj_1257_bs_52_pn_${pn}_ep_50"
             else
-                model_name="emo_vis_roi_pretrained_lr_${lr}_subj_${subj}_bs_52_pn_${pn}_ep_50"
+                model_name="vis_roi_pretrained_lr_${lr}_subj_${subj}_bs_52_pn_${pn}_ep_50"
             fi
 
             CUDA_VISIBLE_DEVICES=${device} python3 -W "ignore" main.py --exec_mode train --subj $subj \
             --model-name $model_name \
             --epochs 50 --batch-size 52 --lr ${lr} --weight-decay ${wd} \
             --task-type brain --pretrained default --image-backbone resnet18 --model-type ${model_type} \
-            --brain-backbone ${mlp_ver} --pool-num ${pn} --data emo_vis_roi --cat-only --fusion-ver ${fusion_ver} \
+            --brain-backbone ${mlp_ver} --pool-num ${pn} --data roi --cat-only --fusion-ver ${fusion_ver} \
             $DONGHO
 
             CUDA_VISIBLE_DEVICES=${device} python3 -W "ignore" main.py --exec_mode predict --subj $subj \
             --model-name $model_name \
             --epochs 50 --batch-size 52 --lr ${lr} --weight-decay ${wd} \
             --task-type brain --pretrained None --image-backbone resnet18 --model-type ${model_type} \
-            --brain-backbone ${mlp_ver} --pool-num ${pn} --data emo_vis_roi --cat-only --fusion-ver ${fusion_ver} \
+            --brain-backbone ${mlp_ver} --pool-num ${pn} --data roi --cat-only --fusion-ver ${fusion_ver} \
             --best $DONGHO
         done
     done

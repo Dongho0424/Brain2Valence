@@ -89,6 +89,11 @@ def get_args():
     args.add_argument("--rec-mult", type=float, default=1., help="The weight of brain reconstruction loss")
     args.add_argument("--cyc-mult", type=float, default=1., help="The weight of cycle loss")
 
+    # For excluding minor category experiment
+    args.add_argument("--exclude-least", action="store_true", help="Exclude least frequent categories [1, 17, 22]", default=False)
+    args.add_argument("--exclude-low", action="store_true", help="Exclude low frequent categories [1, 4, 6, 10, 15, 17, 20, 22]", default=False)
+    args.add_argument("--exclude-strategy", type=int, default=1, choices=[1, 2], help="strategy1: delete entire row, strategy2: delete corrsponding categories only")
+
     args = args.parse_args()
 
     return args

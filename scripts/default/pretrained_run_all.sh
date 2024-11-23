@@ -15,7 +15,7 @@ DONGHO=" --wandb-project pretrained_dataset_v2 --wandb-entity donghochoi --wandb
 ## vis_roi
 # for lr in 1e-5 3e-5 5e-5 1e-4 3e-4 5e-4 8e-6 
 # do
-#     for subj in 1 #2 5 7 "$all_subjects"
+#     for subj in 2 5 7 "$all_subjects" #1
 #     do
 #         for pn in 1024 2048 4096
 #         do
@@ -46,7 +46,7 @@ DONGHO=" --wandb-project pretrained_dataset_v2 --wandb-entity donghochoi --wandb
 
 # for lr in 1e-5 3e-5 5e-5 1e-4 3e-4 5e-4 8e-6 
 # do
-#     for subj in 1 #2 5 7 "$all_subjects"
+#     for subj in 2 5 7 "$all_subjects" #1
 #     do
 #         for pn in 1024 2048 4096
 #         do
@@ -77,7 +77,7 @@ DONGHO=" --wandb-project pretrained_dataset_v2 --wandb-entity donghochoi --wandb
 
 # for lr in 1e-5 3e-5 5e-5 1e-4 3e-4 5e-4 8e-6 
 # do
-#     for subj in 1 #2 5 7 "$all_subjects"
+#     for subj in 2 5 7 "$all_subjects" #1
 #     do
 #         for pn in 1024 2048 4096
 #         do
@@ -107,7 +107,7 @@ DONGHO=" --wandb-project pretrained_dataset_v2 --wandb-entity donghochoi --wandb
 ## img only
 for lr in 1e-5 3e-5 5e-5 1e-4 3e-4 5e-4 8e-6 
 do
-    for subj in 1 #2 5 7 "$all_subjects"
+    for subj in 2 5 7 "$all_subjects" #1
     do
         if [ "$subj" == "$all_subjects" ]; then
             model_name="img_pretrained_lr_${lr}_subj_1257"

@@ -19,7 +19,7 @@ pretrained="default"
 # train은 subject가 본 이미지대로 하더라도 test set은 all subject가 본 test set으로
 for lr in 1e-5 3e-5 5e-5 1e-4 3e-4 5e-4 8e-6
 do
-    for subj in 1 #2 5 7 "$all_subjects"
+    for subj in 2 5 7 "$all_subjects" #1
     do
         if [ "$subj" == "$all_subjects" ]; then
             model_name="img_pretrained_lr_${lr}_subj_1257"
@@ -48,7 +48,7 @@ done
 # train은 subject가 본 이미지대로 하더라도 test set은 all subject가 본 test set으로
 for lr in 1e-5 3e-5 5e-5 1e-4 3e-4 5e-4 8e-6
 do
-    for subj in 1 #2 5 7 "$all_subjects"
+    for subj in 2 5 7 "$all_subjects" #1
     do
         if [ "$subj" == "$all_subjects" ]; then
             model_name="img_pretrained_lr_${lr}_subj_1257_datasetv1_1"

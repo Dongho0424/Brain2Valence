@@ -42,6 +42,7 @@ class BrainModel(nn.Module):
                  backbone_freeze=False,
                  subjects = [1, 2, 5, 7], # for subject specific mlp model
                  cat_only = False,
+                 cat_num=26,
                  fusion_ver=1, # 1 or 2, 999 for one-point
                  ):
         super().__init__()
@@ -65,6 +66,7 @@ class BrainModel(nn.Module):
         self.brain_in_dim = brain_in_dim
         self.subjects = subjects
         self.cat_only = cat_only
+        self.cat_num = cat_num
 
         print("#############################")
         print("### Initialize BrainModel ###")
@@ -76,6 +78,7 @@ class BrainModel(nn.Module):
         print("Brain Data Type:", brain_data_type)
         print("Data type:", brain_data_type)
         print("Category Prediction Only:", cat_only)
+        print("The num of Categories to predict:", cat_num)
         print("#############################")
 
         ## Image Model ##
@@ -117,7 +120,6 @@ class BrainModel(nn.Module):
                     nn.Dropout(0.15)
                 ) for _ in range (4)])
             self.proj = nn.Linear(h, brain_out_dim, bias=True)
-
         elif self.brain_backbone == "mlp2": # lightweight version of "mlp1"
             assert len(subjects) == 1, "mlp2 model is only for subject specific model"
 
@@ -267,9 +269,9 @@ class BrainModel(nn.Module):
 
         ## Final Layers ##
         if self.cat_only:
-            self.fc_cat = nn.Linear(fuse_out_dim, 26)
+            self.fc_cat = nn.Linear(fuse_out_dim, cat_num)
         else:
-            self.fc_cat = nn.Linear(fuse_out_dim, 26)
+            self.fc_cat = nn.Linear(fuse_out_dim, cat_num)
             self.fc_vad = nn.Linear(fuse_out_dim, 3)
 
         ## Using Pretrained Weights ## 
@@ -356,8 +358,8 @@ class BrainModel(nn.Module):
         - subj_list: list of subj
             - different from self.subjects, which is used for initializing embedder and builder
             - this subj_list is used for selecting specific subject's embedder
-        - out: (B, 26), (B, 3)
-            - 26 for emotion categories
+        - out: (B, cat_num), (B, 3)
+            - cat_num for emotion categories
             - 3 for vad
         """
         assert not (self.image_model_type in "B" and x_body is None), "body is required for model type B"

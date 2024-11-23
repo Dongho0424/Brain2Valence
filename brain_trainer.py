@@ -33,23 +33,31 @@ class BrainTrainer(EmoticTrainer):
             utils.get_transforms_emotic()
 
         if self.args.dataset_ver == 2:
-            train_dataset = BrainDataset2(subjects=self.subjects,
-                                          split='train',
-                                          data_type=self.args.data,
-                                          pool_num=self.args.pool_num,
-                                          context_transform=train_context_transform,
-                                          body_transform=train_body_transform,
-                                          normalize=True,
-                                          )
+            train_dataset = BrainDataset2(
+                subjects=self.subjects,
+                split='train',
+                data_type=self.args.data,
+                pool_num=self.args.pool_num,
+                context_transform=train_context_transform,
+                body_transform=train_body_transform,
+                normalize=True,
+                exclude_least=self.args.exclude_least,
+                exclude_low=self.args.exclude_low,
+                exclude_strategy=self.args.exclude_strategy,
+            )
             
-            val_dataset = BrainDataset2(subjects=self.subjects,
-                                        split='val',
-                                        data_type=self.args.data,
-                                        pool_num=self.args.pool_num,
-                                        context_transform=test_context_transform,
-                                        body_transform=test_body_transform,
-                                        normalize=True,
-                                        )
+            val_dataset = BrainDataset2(
+                subjects=self.subjects,
+                split='val',
+                data_type=self.args.data,
+                pool_num=self.args.pool_num,
+                context_transform=test_context_transform,
+                body_transform=test_body_transform,
+                normalize=True,
+                exclude_least=self.args.exclude_least,
+                exclude_low=self.args.exclude_low,
+                exclude_strategy=self.args.exclude_strategy,
+            )
 
         elif self.args.dataset_ver == 1:
             train_split = 'one_point' if self.args.one_point else 'train'
@@ -90,6 +98,12 @@ class BrainTrainer(EmoticTrainer):
         return train_dl, val_dl, len(train_dataset), len(val_dataset)
     
     def get_model(self):
+        self.cat_num = 26
+        if self.args.exclude_least:
+            self.cat_num -= 3 # exclude 1, 17, 22
+        elif self.args.exclude_low:
+            self.cat_num -= 8 # exclude 1, 4, 6, 10, 15, 17, 20, 22
+
         model = BrainModel(
             image_backbone=self.args.image_backbone,
             image_model_type=self.args.model_type,
@@ -102,6 +116,7 @@ class BrainTrainer(EmoticTrainer):
             pretrained=self.args.pretrained,
             wgt_path=self.args.wgt_path,
             cat_only=self.args.cat_only,
+            cat_num=self.cat_num,
             fusion_ver=self.args.fusion_ver
         )
 
@@ -168,8 +183,8 @@ class BrainTrainer(EmoticTrainer):
 
             self.model.eval()
             val_loss = 0
-            pred_cats = np.zeros((self.args.batch_size, 26))
-            gt_cats = np.zeros((self.args.batch_size, 26))
+            pred_cats = np.zeros((self.args.batch_size, self.cat_num))
+            gt_cats = np.zeros((self.args.batch_size, self.cat_num))
             with torch.no_grad():
                 for i, (context_image, body_image, valence, arousal, dominance, category, brain_data) in tqdm(enumerate(self.val_dl)):
 
@@ -206,7 +221,7 @@ class BrainTrainer(EmoticTrainer):
                 # Filter out the specific UserWarning
                 warnings.filterwarnings("ignore", message="No positive class found in y_true, recall is set to one for all thresholds")
 
-                ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(26)]
+                ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(self.cat_num)]
                 mAP = np.mean(ap_scores)
                 if self.args.wandb_log: wandb.log({"val_mAP": mAP}, step=epoch)
 

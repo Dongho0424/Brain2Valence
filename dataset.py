@@ -344,20 +344,19 @@ class BrainDataset2(Dataset):
                  context_transform=None,
                  body_transform=None,
                  normalize=False,
+                 exclude_least=False, # w/o 1, 17, 22
+                 exclude_low=False,   # w/o 1, 4, 6, 10, 15, 17, 20, 22
+                 exclude_strategy=1,  # 1: delete entire row, 2: delete corrsponding categories only
                  ):
-        self.metadata = pd.read_csv('/home/dongho/brain2valence/emotic_nsd_joint_metadata_split.csv', dtype={'subject': str})
         self.subjects = subjects
         self.split = split
         
+        print("### Initializing BrainDataset v2 ###")
         print("Emotic Split: ", split)
         print("Subjects: ", subjects)
         print("Pool Num: ", pool_num)
-        self.metadata = self.metadata[self.metadata['emotic_split'] == split]
-        # if subj=1, then ['1', 'all_1']
-        # if subj=1 or 2, then ['1', '2', 'all_1', 'all_2']
-        self.metadata = self.metadata[self.metadata['subject'].isin([f"{s}" for s in subjects] + [f"all_{s}" for s in subjects])] 
-        self.metadata.reset_index(inplace=True, drop=True)
-        
+        self.metadata = self.set_metadata(exclude_least, exclude_low, exclude_strategy)
+            
         self.context_transform = context_transform
         self.body_transform = body_transform
         self.pool_num = pool_num
@@ -392,6 +391,72 @@ class BrainDataset2(Dataset):
             self.num_voxels[f'subj{s}'] = mean.shape[0]
             self.voxel_means[f'subj{s}'] = mean
             self.voxel_stds[f'subj{s}'] = std
+
+    def set_metadata(self, exclude_least, exclude_low, exclude_strategy):
+        metadata = pd.read_csv('/home/dongho/brain2valence/emotic_nsd_joint_metadata_split.csv', dtype={'subject': str})
+        metadata = metadata[metadata['emotic_split'] == self.split]
+        # if subj=1, then ['1', 'all_1']
+        # if subj=1 or 2, then ['1', '2', 'all_1', 'all_2']
+        metadata = metadata[metadata['subject'].isin([f"{s}" for s in self.subjects] + [f"all_{s}" for s in self.subjects])] 
+        metadata.reset_index(inplace=True, drop=True)
+
+        if not exclude_least and not exclude_low: # just default setting
+            # eusure 'category' column is a list of integer
+            metadata['category'] = metadata['category'].apply(lambda x: [int(i) for i in literal_eval(x)])
+            return metadata
+
+        if exclude_least and exclude_low:
+            raise ValueError("You should set either exclude_least or exclude_low to True")
+
+        # - 1. Anger: 26 
+        # - 17. Pain: 28 
+        # - 22. Suffering: 35
+        least_category = [1, 17, 22]
+        # - 4. Aversion: 51
+        # - 6. Disapproval: 83
+        # - 10. Embarrassment: 56
+        # - 15. Fear: 75
+        # - 20. Sadness: 52
+        low_category = least_category + [4, 6, 10, 15, 20]
+
+        def contains_category(x, minor_category):
+            x_int = [int(i) for i in literal_eval(x)]
+            return any(cat in minor_category for cat in x_int)
+        def filter_and_remove_categories(x, minor_category):
+            x_int = [int(i) for i in literal_eval(x)]
+            filtered = [_x for _x in x_int if _x not in minor_category]
+            if len(filtered) == 0:
+                return np.nan
+            return filtered
+
+        # strategy 1: delete entire row if any of the category is in minor_category
+        if exclude_strategy == 1:
+            if exclude_least:
+                metadata = metadata[~metadata['category'].apply(lambda x: contains_category(x, least_category))]
+            elif exclude_low:
+                metadata = metadata[~metadata['category'].apply(lambda x: contains_category(x, low_category))]
+            # eusure 'category' column is a list of integer
+            metadata['category'] = metadata['category'].apply(lambda x: [int(i) for i in literal_eval(x)])
+        
+        # strategy 2: delete only corresponding category in a 'category' column. If nothing left, delete row itself
+        elif exclude_strategy == 2:
+            if exclude_least:
+                metadata['category'] = metadata['category'].apply(lambda x: filter_and_remove_categories(x, least_category))
+            elif exclude_low:
+                metadata['category'] = metadata['category'].apply(lambda x: filter_and_remove_categories(x, low_category))
+            # If nothing left, drop the row
+            metadata = metadata.dropna(subset=['category'])
+        else: 
+            raise ValueError("exclude_strategy should be either 1 or 2")
+
+        self.minor_category = least_category if exclude_least else low_category
+        self.is_exclude = exclude_least or exclude_low
+        
+        print("# Excluding minor categories #")
+        print(f"w/o categories: {least_category if exclude_least else low_category}")
+        print(f"exclude strategy: {exclude_strategy}")
+
+        return metadata
         
     def __len__(self):
         return len(self.metadata)
@@ -420,10 +485,19 @@ class BrainDataset2(Dataset):
         dominance = sample['dominance'] / 10.0 if self.normalize else sample['dominance']
 
         # get category label torch.tensor
-        cat_label = torch.zeros(26)
+        cat_label_temp = np.zeros(26)
+        for cat in sample['category']:
+            cat_label_temp[cat] = 1 
 
-        for cat in literal_eval(sample['category']):
-            cat_label[int(cat)] = 1 
+        if self.is_exclude:
+            # Remove the elements whose index is in minor_category
+            cat_label = np.array([item for idx, item in enumerate(cat_label_temp) if idx not in self.minor_category])
+            # Ensure this removing must not change the true category 
+            # because we already filtered out the minor categories in metadata
+            assert np.sum(cat_label_temp) == np.sum(cat_label), "Minor categories are not properly removed"
+            assert len(cat_label) == 26 - len(self.minor_category), "Minor categories are not properly removed"
+        else:
+            cat_label = cat_label_temp
         
         # find subject whose sample[f'subject{1~8}_rep{repeat_index}_beta_idx'] is not -1
         # sample['subject'] can be either 'n' or 'all_n'. 
