@@ -1,4 +1,4 @@
-device=1
+device=2
 model_type=BI # fixed after this time
 # subj=1
 fusion_ver=1 # fixed

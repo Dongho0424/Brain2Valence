@@ -156,14 +156,7 @@ class BrainPredictor():
         mAP = np.mean(ap_scores)
 
         _, idx2cat = utils.get_emotic_categories()
-        for i, ap in enumerate(ap_scores):
-            print(f"AP for {i}. {idx2cat[i]}: {ap:.4f}")
-        print("mAP: {:.4f}".format(mAP))
 
-        # plot AP per category
-        plt.figure(figsize=(10, 8))
-        plt.title('Average Precision per category')
-        plt.yscale('log')
         cat_list = list(range(26))
         if self.args.exclude_least:
             # exclude 1, 7, 22
@@ -171,6 +164,16 @@ class BrainPredictor():
         elif self.args.exclude_low:
             # exclude 1, 4, 6, 10, 15, 17, 20, 22
             cat_list = [c for c in cat_list if c not in [1, 4, 6, 10, 15, 17, 20, 22]]
+
+        # print
+        for i, c in enumerate(cat_list):
+            print(f"AP for {c}. {idx2cat[c]}: {ap_scores[i]:.4f}")
+        print("mAP: {:.4f}".format(mAP))
+
+        # plot AP per category
+        plt.figure(figsize=(10, 8))
+        plt.title('Average Precision per category')
+        plt.yscale('log')
         plt.xticks(range(self.cat_num), [f"{i}. {idx2cat[i]}" for i in cat_list], rotation=-90)
         for i, ap in enumerate(ap_scores):
             plt.bar(i, ap)

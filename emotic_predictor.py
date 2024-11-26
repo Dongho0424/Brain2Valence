@@ -73,14 +73,18 @@ class EmoticPredictor:
                                                          subjects=self.subjects)
             else: raise ValueError("Invalid dataset version")
 
-        test_dataset = EmoticDataset(data_path=data_path,
-                                    split='test',
-                                    emotic_annotations=test_data,
-                                    context_transform=test_context_transform,
-                                    body_transform=test_body_transform,
-                                    normalize=True,
-                                    dataset_ver=self.args.dataset_ver
-                                    )
+        test_dataset = EmoticDataset(
+            data_path=data_path,
+            split='test',
+            emotic_annotations=test_data,
+            context_transform=test_context_transform,
+            body_transform=test_body_transform,
+            normalize=True,
+            dataset_ver=self.args.dataset_ver,
+            exclude_least=self.args.exclude_least,
+            exclude_low=self.args.exclude_low,
+            exclude_strategy=self.args.exclude_strategy
+        )
 
         # always batch size is 1
         test_dl = DataLoader(test_dataset, batch_size=1, shuffle=False)
@@ -99,14 +103,18 @@ class EmoticPredictor:
         _, _, test_context_transform, test_body_transform =\
             utils.get_transforms_emotic()
         
-        test_dataset = EmoticDataset(data_path=data_path,
-                                    split='test',
-                                    emotic_annotations=test_data,
-                                    context_transform=test_context_transform,
-                                    body_transform=test_body_transform,
-                                    normalize=True,
-                                    dataset_ver=self.args.dataset_ver
-                                    )
+        test_dataset = EmoticDataset(
+            data_path=data_path,
+            split='test',
+            emotic_annotations=test_data,
+            context_transform=test_context_transform,
+            body_transform=test_body_transform,
+            normalize=True,
+            dataset_ver=self.args.dataset_ver,
+            exclude_least=self.args.exclude_least,
+            exclude_low=self.args.exclude_low,
+            exclude_strategy=self.args.exclude_strategy
+        )
 
         # always batch size is 1
         test_dl = DataLoader(test_dataset, batch_size=1, shuffle=False)
@@ -115,13 +123,20 @@ class EmoticPredictor:
         return test_dl, len(test_dataset)
     
     def load_model(self, args, use_best=True) -> nn.Module :
+        self.cat_num = 26
+        if self.args.exclude_least:
+            self.cat_num -= 3 # exclude 1, 17, 22
+        elif self.args.exclude_low:
+            self.cat_num -= 8 # exclude 1, 4, 6, 10, 15, 17, 20, 22
+
         model = EmoticModel(
             image_backbone=self.args.image_backbone,
             image_model_type=self.args.model_type,
             pretrained=self.args.pretrained,
             wgt_path=self.args.wgt_path,
             backbone_freeze=self.args.backbone_freeze,
-            cat_only=self.args.cat_only
+            cat_only=self.args.cat_only,
+            cat_num=self.cat_num,
         )
         
         model_name = args.model_name # ex) "all_subjects_res18_mae_2"
@@ -145,8 +160,8 @@ class EmoticPredictor:
         self.model.cuda()
         self.model.eval()
 
-        pred_cats = np.zeros((self.num_test, 26))
-        gt_cats = np.zeros((self.num_test, 26))
+        pred_cats = np.zeros((self.num_test, self.cat_num))
+        gt_cats = np.zeros((self.num_test, self.cat_num))
         pred_vads = np.zeros((self.num_test, 3))
         gt_vads = np.zeros((self.num_test, 3))
 
@@ -170,26 +185,34 @@ class EmoticPredictor:
                     gt_vads[i, :] = gt_vad.cpu().numpy()
 
         # evaluation for categorical emotion
-        ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(26)]
+        ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(self.cat_num)]
         mAP = np.mean(ap_scores)
-
-        if self.args.wandb_log: wandb.log({"mAP": mAP})
-        # if self.args.wandb_log: wandb.log({"all_subj_mAP": mAP}) # temporarily using testset shown to all subject 
         
         _, idx2cat = utils.get_emotic_categories()
-        # for i, ap in enumerate(ap_scores):
-            # print(f"AP for {i}. {idx2cat[i]}: {ap:.4f}")
-        print(f"{self.args.lr} model; mAP: {mAP}")
+        cat_list = list(range(26))
+        if self.args.exclude_least:
+            # exclude 1, 7, 22
+            cat_list = [c for c in cat_list if c not in [1, 17, 22]]
+        elif self.args.exclude_low:
+            # exclude 1, 4, 6, 10, 15, 17, 20, 22
+            cat_list = [c for c in cat_list if c not in [1, 4, 6, 10, 15, 17, 20, 22]]
+        # print
+        for i, c in enumerate(cat_list):
+            print(f"AP for {c}. {idx2cat[c]}: {ap_scores[i]:.4f}")
+        print("mAP: {:.4f}".format(mAP))
 
         # plot AP per category
         plt.figure(figsize=(10, 8))
         plt.title('Average Prevision per category')
         plt.yscale('log')
-        plt.xticks(range(26), [f"{i}. {idx2cat[i]}" for i in range(26)], rotation=-90)
+        plt.xticks(range(self.cat_num), [f"{i}. {idx2cat[i]}" for i in cat_list], rotation=-90)
         for i, ap in enumerate(ap_scores):
             plt.bar(i, ap)
             plt.text(i, ap, f'{ap:.4f}', ha='center', va='bottom')
-        if self.args.wandb_log: wandb.log({f"Average Prevision per category": wandb.Image(plt)})
+        if self.args.wandb_log:
+            wandb.log({"mAP": mAP,
+                       "Average Precision per category": wandb.Image(plt)})
+            # if self.args.wandb_log: wandb.log({"all_subj_mAP": mAP}) # temporarily using testset shown to all subject 
         plt.clf()
         
         if not self.args.cat_only:

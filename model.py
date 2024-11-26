@@ -504,6 +504,7 @@ class EmoticModel(nn.Module):
                  wgt_path: str = None,
                  backbone_freeze=False,
                  cat_only=False,
+                 cat_num=26,
                  ):
         super().__init__()
 
@@ -516,11 +517,14 @@ class EmoticModel(nn.Module):
         if pretrained == "EMOTIC":
             assert(wgt_path is not None), "wgt_path is required for EMOTIC pretrained model"
 
+        self.cat_num = cat_num
+
         print("#############################")
         print("### Initialize EMOTICModel ###")
         print("Image Model backbone:", image_backbone)
         print("Image Model type:", image_model_type)
         print("Category Prediction Only:", cat_only)
+        print("The num of Categories to predict:", cat_num)
         print("#############################")
 
         if self.backbone == "resnet18":
@@ -576,9 +580,9 @@ class EmoticModel(nn.Module):
             )
             
             if self.cat_only:
-                self.fc_cat = nn.Linear(256, 26)
+                self.fc_cat = nn.Linear(256, self.cat_num)
             else:
-                self.fc_cat = nn.Linear(256, 26)
+                self.fc_cat = nn.Linear(256, self.cat_num)
                 self.fc_vad = nn.Linear(256, 3)
             
             # freeze parameters
@@ -614,8 +618,8 @@ class EmoticModel(nn.Module):
     def forward(self, x_body: torch.Tensor = None, x_context: torch.Tensor = None):
         """
         - body: (B, 3, 224, 224), (B, 3, 112, 112)
-        - out: (B, 26), (B, 3)
-            - 26 for emotion categories
+        - out: (B, cat_num), (B, 3)
+            - cat_num for emotion categories
             - 3 for vad
         """
         assert not (self.model_type in "B" and x_body is None), "body is required for model type B"

@@ -91,26 +91,46 @@ class EmoticTrainer:
                                                          subjects=self.subjects)
             else: raise NotImplementedError(f'dataset_ver {self.args.dataset_ver} is not implemented')
 
-        train_dataset = EmoticDataset(data_path=data_path,
-                                      split='train',
-                                      emotic_annotations=train_data,
-                                      context_transform=train_context_transform,
-                                      body_transform=train_body_transform,
-                                      normalize=True,
-                                      dataset_ver=self.args.dataset_ver
-                                      )
+        train_dataset = EmoticDataset(
+            data_path=data_path,
+            split='train',
+            emotic_annotations=train_data,
+            context_transform=train_context_transform,
+            body_transform=train_body_transform,
+            normalize=True,
+            dataset_ver=self.args.dataset_ver,
+            exclude_least=self.args.exclude_least,
+            exclude_low=self.args.exclude_low,
+            exclude_strategy=self.args.exclude_strategy
+        )
 
-        val_dataset = EmoticDataset(data_path=data_path,
-                                    split='val',
-                                    emotic_annotations=val_data,
-                                    context_transform=test_context_transform,
-                                    body_transform=test_body_transform,
-                                    normalize=True,
-                                    dataset_ver=self.args.dataset_ver
-                                    )
+        val_dataset = EmoticDataset(
+            data_path=data_path,
+            split='val',
+            emotic_annotations=val_data,
+            context_transform=test_context_transform,
+            body_transform=test_body_transform,
+            normalize=True,
+            dataset_ver=self.args.dataset_ver,
+            exclude_least=self.args.exclude_least,
+            exclude_low=self.args.exclude_low,
+            exclude_strategy=self.args.exclude_strategy
+        )
 
-        train_dl = DataLoader(train_dataset, batch_size=self.args.batch_size, shuffle=True)
-        val_dl = DataLoader(val_dataset, batch_size=self.args.batch_size, shuffle=False)
+        train_dl = DataLoader(
+            train_dataset, 
+            batch_size=self.args.batch_size, 
+            shuffle=True,
+            num_workers=4,
+            pin_memory=True,
+        )
+        val_dl = DataLoader(
+            val_dataset, 
+            batch_size=self.args.batch_size, 
+            shuffle=False,
+            num_workers=4,
+            pin_memory=True,
+        )
         print('# train data:', len(train_dataset))
         print('# val data:', len(val_dataset))
 
@@ -127,23 +147,31 @@ class EmoticTrainer:
         train_context_transform, train_body_transform, test_context_transform, test_body_transform =\
             utils.get_transforms_emotic()
         
-        train_dataset = EmoticDataset(data_path=data_path,
-                                      split='train',
-                                      emotic_annotations=train_data,
-                                      context_transform=train_context_transform,
-                                      body_transform=train_body_transform,
-                                      normalize=True,
-                                      dataset_ver=self.args.dataset_ver
-                                      )
+        train_dataset = EmoticDataset(
+            data_path=data_path,
+            split='train',
+            emotic_annotations=train_data,
+            context_transform=train_context_transform,
+            body_transform=train_body_transform,
+            normalize=True,
+            dataset_ver=self.args.dataset_ver,
+            exclude_least=self.args.exclude_least,
+            exclude_low=self.args.exclude_low,
+            exclude_strategy=self.args.exclude_strategy
+        )
 
-        val_dataset = EmoticDataset(data_path=data_path,
-                                    split='val',
-                                    emotic_annotations=val_data,
-                                    context_transform=test_context_transform,
-                                    body_transform=test_body_transform,
-                                    normalize=True,
-                                    dataset_ver=self.args.dataset_ver
-                                    )
+        val_dataset = EmoticDataset(
+            data_path=data_path,
+            split='val',
+            emotic_annotations=val_data,
+            context_transform=test_context_transform,
+            body_transform=test_body_transform,
+            normalize=True,
+            dataset_ver=self.args.dataset_ver,
+            exclude_least=self.args.exclude_least,
+            exclude_low=self.args.exclude_low,
+            exclude_strategy=self.args.exclude_strategy
+        )
 
         train_dl = DataLoader(train_dataset, batch_size=self.args.batch_size, shuffle=True)
         val_dl = DataLoader(val_dataset, batch_size=self.args.batch_size, shuffle=False)
@@ -153,13 +181,20 @@ class EmoticTrainer:
         return train_dl, val_dl, len(train_dataset), len(val_dataset)
 
     def get_model(self):
+        self.cat_num = 26
+        if self.args.exclude_least:
+            self.cat_num -= 3 # exclude 1, 17, 22
+        elif self.args.exclude_low:
+            self.cat_num -= 8 # exclude 1, 4, 6, 10, 15, 17, 20, 22
+
         model = EmoticModel(
             image_backbone=self.args.image_backbone,
             image_model_type=self.args.model_type,
             pretrained=self.args.pretrained,
             wgt_path=self.args.wgt_path,
             backbone_freeze=self.args.backbone_freeze,
-            cat_only=self.args.cat_only
+            cat_only=self.args.cat_only,
+            cat_num=self.cat_num,
         )
 
         utils.print_model_info(model)
@@ -262,8 +297,8 @@ class EmoticTrainer:
 
             self.model.eval()
             val_loss = 0
-            pred_cats = np.zeros((self.args.batch_size, 26))
-            gt_cats = np.zeros((self.args.batch_size, 26))
+            pred_cats = np.zeros((self.args.batch_size, self.cat_num))
+            gt_cats = np.zeros((self.args.batch_size, self.cat_num))
             with torch.no_grad():
                 for i, (context_image, body_image, valence, arousal, dominance, category) in tqdm(enumerate(self.val_dl)):
 
@@ -287,7 +322,7 @@ class EmoticTrainer:
                         val_loss += loss.item()
                 
             val_loss /= self.num_val
-            ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(26)]
+            ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(self.cat_num)]
             mAP = np.mean(ap_scores)
 
             if self.args.wandb_log:

@@ -176,11 +176,6 @@ class BrainTrainer(EmoticTrainer):
 
             train_loss /= self.num_train
 
-            if self.args.wandb_log:
-                wandb.log(
-                    {"train_loss": train_loss,
-                    "lr": self.optimizer.param_groups[0]['lr']}, step=epoch)
-
             self.model.eval()
             val_loss = 0
             pred_cats = np.zeros((self.args.batch_size, self.cat_num))
@@ -213,27 +208,32 @@ class BrainTrainer(EmoticTrainer):
                         loss = cat_loss_param * loss_cat + vad_loss_param * loss_vad
                         val_loss += loss.item()
                 
-                val_loss /= self.num_val
-                if self.args.wandb_log: wandb.log({"val_loss": val_loss}, step=epoch)
 
-                # evaluation for categorical emotion
+            # Filter out the specific UserWarning
+            warnings.filterwarnings("ignore", message="No positive class found in y_true, recall is set to one for all thresholds")
 
-                # Filter out the specific UserWarning
-                warnings.filterwarnings("ignore", message="No positive class found in y_true, recall is set to one for all thresholds")
+            val_loss /= self.num_val
+            ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(self.cat_num)]
+            mAP = np.mean(ap_scores)
 
-                ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(self.cat_num)]
-                mAP = np.mean(ap_scores)
-                if self.args.wandb_log: wandb.log({"val_mAP": mAP}, step=epoch)
+            if self.args.wandb_log:
+                wandb.log({"train_loss": train_loss,
+                        "lr": self.optimizer.param_groups[0]['lr'],
+                        "val_loss": val_loss,
+                        "val_mAP": mAP
+                        }, step=epoch)
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 print ('saving model at epoch: %d' %(epoch))
-                if self.args.wandb_log: wandb.log({"best_val_loss": best_val_loss}, step=epoch)
+                if self.args.wandb_log: 
+                    wandb.log({"best_val_loss": best_val_loss}, step=epoch)
                 self.save_model(self.args, self.model, best=True)
 
             if mAP > best_val_mAP:
                 best_val_mAP = mAP
-                if self.args.wandb_log: wandb.log({"best_val_mAP": mAP}, step=epoch)
+                if self.args.wandb_log: 
+                    wandb.log({"best_val_mAP": mAP}, step=epoch)
 
             self.scheduler.step()
 
