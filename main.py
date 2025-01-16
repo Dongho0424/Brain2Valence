@@ -94,6 +94,9 @@ def get_args():
     args.add_argument("--exclude-low", action="store_true", help="Exclude low frequent categories [1, 4, 6, 10, 15, 17, 20, 22]", default=False)
     args.add_argument("--exclude-strategy", type=int, default=1, choices=[1, 2], help="strategy1: delete entire row, strategy2: delete corrsponding categories only")
 
+    # For clustering group experiment
+    args.add_argument("--cluster", action="store_true", help="Clustering group experiment", default=False)
+
     args = args.parse_args()
 
     return args

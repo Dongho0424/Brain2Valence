@@ -59,6 +59,7 @@ class BrainPredictor():
                 exclude_least=self.args.exclude_least,
                 exclude_low=self.args.exclude_low,
                 exclude_strategy=self.args.exclude_strategy,
+                cluster=self.args.cluster,
             )
 
         elif self.args.dataset_ver == 1:
@@ -84,6 +85,8 @@ class BrainPredictor():
             self.cat_num -= 3 # exclude 1, 17, 22
         elif self.args.exclude_low:
             self.cat_num -= 8 # exclude 1, 4, 6, 10, 15, 17, 20, 22
+        elif self.args.cluster:
+            self.cat_num = 4  # 0: angry, 1: happy, 2: neutral, 3: sad
 
         model = BrainModel(
             image_backbone=self.args.image_backbone,
@@ -154,16 +157,24 @@ class BrainPredictor():
         # evaluation for categorical emotion
         ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(self.cat_num)]
         mAP = np.mean(ap_scores)
+        # # for debugging
+        # print("gt_cats:", gt_cats)
+        # print("pred_cats:", pred_cats)
 
-        _, idx2cat = utils.get_emotic_categories()
+        _, idx2cat = utils.get_emotic_categories(cluster=self.args.cluster)
 
         cat_list = list(range(26))
+        rotation = -90
         if self.args.exclude_least:
             # exclude 1, 7, 22
             cat_list = [c for c in cat_list if c not in [1, 17, 22]]
         elif self.args.exclude_low:
             # exclude 1, 4, 6, 10, 15, 17, 20, 22
             cat_list = [c for c in cat_list if c not in [1, 4, 6, 10, 15, 17, 20, 22]]
+        elif self.args.cluster:
+            # 0: angry, 1: happy, 2: neutral, 3: sad
+            cat_list = list(range(4))
+            rotation = 0
 
         # print
         for i, c in enumerate(cat_list):
@@ -174,7 +185,7 @@ class BrainPredictor():
         plt.figure(figsize=(10, 8))
         plt.title('Average Precision per category')
         plt.yscale('log')
-        plt.xticks(range(self.cat_num), [f"{i}. {idx2cat[i]}" for i in cat_list], rotation=-90)
+        plt.xticks(range(self.cat_num), [f"{i}. {idx2cat[i]}" for i in cat_list], rotation=rotation)
         for i, ap in enumerate(ap_scores):
             plt.bar(i, ap)
             plt.text(i, ap, f'{ap:.4f}', ha='center', va='bottom')

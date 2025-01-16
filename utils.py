@@ -603,11 +603,15 @@ def get_emotic_df_for_pretraining(subjects):
 
     return train_data, val_data, test_data
 
-def get_emotic_categories():
-    categories = ['Affection', 'Anger', 'Annoyance', 'Anticipation', 'Aversion', 'Confidence', 'Disapproval',
+def get_emotic_categories(cluster=False):
+    categories = []
+    if not cluster:
+        categories = ['Affection', 'Anger', 'Annoyance', 'Anticipation', 'Aversion', 'Confidence', 'Disapproval',
                   'Disconnection', 'Disquietment', 'Doubt/Confusion', 'Embarrassment', 'Engagement', 'Esteem',
                   'Excitement', 'Fatigue', 'Fear', 'Happiness', 'Pain', 'Peace', 'Pleasure', 'Sadness',
                   'Sensitivity', 'Suffering', 'Surprise', 'Sympathy', 'Yearning']
+    else:
+        categories = ['Angry', 'Happy', 'Neutral', 'Sad']
 
     cat2idx = {}
     idx2cat = {}

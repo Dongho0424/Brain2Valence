@@ -287,19 +287,21 @@ class EmoticDataset(Dataset):
                  exclude_least=False, # w/o 1, 17, 22
                  exclude_low=False,   # w/o 1, 4, 6, 10, 15, 17, 20, 22
                  exclude_strategy=1,  # 1: delete entire row, 2: delete corrsponding categories only
+                 cluster=False, # cluster categories into 4 groups, angry, happy, neutral, sad
                  ):
 
         self.data_path = data_path
         self.split = split  # train, val, test
-        self.metadata = self.set_metadata(emotic_annotations, exclude_least, exclude_low, exclude_strategy)
+        self.cluster = cluster
+        self.metadata = self.set_metadata(emotic_annotations, exclude_least, exclude_low, exclude_strategy, cluster)
         self.context_transform = context_transform
         self.body_transform = body_transform
         self.normalize = normalize
         self.dataset_ver = dataset_ver
 
-    def set_metadata(self, metadata: pd.DataFrame, exclude_least, exclude_low, exclude_strategy):
+    def set_metadata(self, metadata: pd.DataFrame, exclude_least, exclude_low, exclude_strategy, cluster):
 
-        if not exclude_least and not exclude_low: # just default setting
+        if not exclude_least and not exclude_low and not cluster: # just default setting
             # eusure 'category' column is a list of integer
             metadata['category'] = metadata['category'].apply(lambda x: [int(i) for i in literal_eval(x)])
             return metadata
@@ -307,16 +309,7 @@ class EmoticDataset(Dataset):
         if exclude_least and exclude_low:
             raise ValueError("You should set either exclude_least or exclude_low to True")
 
-        # - 1. Anger: 26 
-        # - 17. Pain: 28 
-        # - 22. Suffering: 35
-        least_category = [1, 17, 22]
-        # - 4. Aversion: 51
-        # - 6. Disapproval: 83
-        # - 10. Embarrassment: 56
-        # - 15. Fear: 75
-        # - 20. Sadness: 52
-        low_category = least_category + [4, 6, 10, 15, 20]
+        self.is_exclude = exclude_least or exclude_low
 
         def contains_category(x, minor_category):
             x_int = [int(i) for i in literal_eval(x)]
@@ -328,32 +321,60 @@ class EmoticDataset(Dataset):
                 return np.nan
             return filtered
 
-        # strategy 1: delete entire row if any of the category is in minor_category
-        if exclude_strategy == 1:
-            if exclude_least:
-                metadata = metadata[~metadata['category'].apply(lambda x: contains_category(x, least_category))]
-            elif exclude_low:
-                metadata = metadata[~metadata['category'].apply(lambda x: contains_category(x, low_category))]
-            # eusure 'category' column is a list of integer
-            metadata['category'] = metadata['category'].apply(lambda x: [int(i) for i in literal_eval(x)])
-        
-        # strategy 2: delete only corresponding category in a 'category' column. If nothing left, delete row itself
-        elif exclude_strategy == 2:
-            if exclude_least:
-                metadata['category'] = metadata['category'].apply(lambda x: filter_and_remove_categories(x, least_category))
-            elif exclude_low:
-                metadata['category'] = metadata['category'].apply(lambda x: filter_and_remove_categories(x, low_category))
-            # If nothing left, drop the row
-            metadata = metadata.dropna(subset=['category'])
-        else: 
-            raise ValueError("exclude_strategy should be either 1 or 2")
+        if self.is_exclude:
+            # - 1. Anger: 26 
+            # - 17. Pain: 28 
+            # - 22. Suffering: 35
+            least_category = [1, 17, 22]
+            # - 4. Aversion: 51
+            # - 6. Disapproval: 83
+            # - 10. Embarrassment: 56
+            # - 15. Fear: 75
+            # - 20. Sadness: 52
+            low_category = least_category + [4, 6, 10, 15, 20]
+            self.minor_category = least_category if exclude_least else low_category
 
-        self.minor_category = least_category if exclude_least else low_category
-        self.is_exclude = exclude_least or exclude_low
-        
-        print("# Excluding minor categories #")
-        print(f"w/o categories: {least_category if exclude_least else low_category}")
-        print(f"exclude strategy: {exclude_strategy}")
+            print("# Excluding minor categories #")
+            print(f"w/o categories: {self.minor_category}")
+            print(f"exclude strategy: {exclude_strategy}")
+
+            # strategy 1: delete entire row if any of the category is in minor_category
+            if exclude_strategy == 1:
+                if exclude_least:
+                    metadata = metadata[~metadata['category'].apply(lambda x: contains_category(x, least_category))]
+                elif exclude_low:
+                    metadata = metadata[~metadata['category'].apply(lambda x: contains_category(x, low_category))]
+                # eusure 'category' column is a list of integer
+                metadata['category'] = metadata['category'].apply(lambda x: [int(i) for i in literal_eval(x)])
+            
+            # strategy 2: delete only corresponding category in a 'category' column. If nothing left, delete row itself
+            elif exclude_strategy == 2:
+                if exclude_least:
+                    metadata['category'] = metadata['category'].apply(lambda x: filter_and_remove_categories(x, least_category))
+                elif exclude_low:
+                    metadata['category'] = metadata['category'].apply(lambda x: filter_and_remove_categories(x, low_category))
+                # If nothing left, drop the row
+                metadata = metadata.dropna(subset=['category'])
+            else: 
+                raise ValueError("exclude_strategy should be either 1 or 2")
+
+        elif cluster:
+            print("# Clustering into groups #")
+            # Angry
+            self.angry_idx = [1, 2, 4, 6]
+            # Happy
+            self.happy_idx = [0, 5, 12, 13, 16, 18, 19, 24]
+            # Neutral
+            self.neutral_idx = [3, 7, 9, 11, 14, 23]
+            # Sad
+            self.sad_idx = [8, 10, 15, 17, 20, 21, 22, 25]
+
+            metadata['category'] = metadata['category'].apply(lambda x: [int(i) for i in literal_eval(x)])
+            metadata['category'] = metadata['category'].apply(
+                lambda x: [0 if i in self.angry_idx else 1 if i in self.happy_idx else 2 if i in self.neutral_idx else 3 for i in x])
+            metadata['category'] = metadata['category'].apply(lambda x: list(set(x))) # remove duplicates
+        else:
+            raise ValueError("You should set either exclude_least or exclude_low to True")
 
         return metadata
 
@@ -399,6 +420,13 @@ class EmoticDataset(Dataset):
             # because we already filtered out the minor categories in metadata
             assert np.sum(cat_label_temp) == np.sum(cat_label), "Minor categories are not properly removed"
             assert len(cat_label) == 26 - len(self.minor_category), "Minor categories are not properly removed"
+        elif self.cluster:
+            cat_label = np.zeros(4) # angry, happy, neutral, sad
+            for cat in sample['category']:
+                if cat in self.angry_idx:     cat_label[0] = 1
+                elif cat in self.happy_idx:   cat_label[1] = 1
+                elif cat in self.neutral_idx: cat_label[2] = 1
+                elif cat in self.sad_idx:     cat_label[3] = 1
         else:
             cat_label = cat_label_temp
         cat_label = torch.from_numpy(cat_label)
@@ -417,6 +445,7 @@ class BrainDataset2(Dataset):
                  exclude_least=False, # w/o 1, 17, 22
                  exclude_low=False,   # w/o 1, 4, 6, 10, 15, 17, 20, 22
                  exclude_strategy=1,  # 1: delete entire row, 2: delete corrsponding categories only
+                 cluster=False, # cluster categories into 4 groups, angry, happy, neutral, sad
                  ):
         self.subjects = subjects
         self.split = split
@@ -425,7 +454,8 @@ class BrainDataset2(Dataset):
         print("Emotic Split: ", split)
         print("Subjects: ", subjects)
         print("Pool Num: ", pool_num)
-        self.metadata = self.set_metadata(exclude_least, exclude_low, exclude_strategy)
+        self.metadata = self.set_metadata(exclude_least, exclude_low, exclude_strategy, cluster)
+        self.cluster = cluster
             
         self.context_transform = context_transform
         self.body_transform = body_transform
@@ -462,7 +492,7 @@ class BrainDataset2(Dataset):
             self.voxel_means[f'subj{s}'] = mean
             self.voxel_stds[f'subj{s}'] = std
 
-    def set_metadata(self, exclude_least, exclude_low, exclude_strategy):
+    def set_metadata(self, exclude_least, exclude_low, exclude_strategy, cluster):
         metadata = pd.read_csv('/home/dongho/brain2valence/emotic_nsd_joint_metadata_split.csv', dtype={'subject': str})
         metadata = metadata[metadata['emotic_split'] == self.split]
         # if subj=1, then ['1', 'all_1']
@@ -470,7 +500,7 @@ class BrainDataset2(Dataset):
         metadata = metadata[metadata['subject'].isin([f"{s}" for s in self.subjects] + [f"all_{s}" for s in self.subjects])] 
         metadata.reset_index(inplace=True, drop=True)
 
-        if not exclude_least and not exclude_low: # just default setting
+        if not exclude_least and not exclude_low and not cluster: # just default setting
             # eusure 'category' column is a list of integer
             metadata['category'] = metadata['category'].apply(lambda x: [int(i) for i in literal_eval(x)])
             return metadata
@@ -478,16 +508,7 @@ class BrainDataset2(Dataset):
         if exclude_least and exclude_low:
             raise ValueError("You should set either exclude_least or exclude_low to True")
 
-        # - 1. Anger: 26 
-        # - 17. Pain: 28 
-        # - 22. Suffering: 35
-        least_category = [1, 17, 22]
-        # - 4. Aversion: 51
-        # - 6. Disapproval: 83
-        # - 10. Embarrassment: 56
-        # - 15. Fear: 75
-        # - 20. Sadness: 52
-        low_category = least_category + [4, 6, 10, 15, 20]
+        self.is_exclude = exclude_least or exclude_low
 
         def contains_category(x, minor_category):
             x_int = [int(i) for i in literal_eval(x)]
@@ -499,33 +520,61 @@ class BrainDataset2(Dataset):
                 return np.nan
             return filtered
 
-        # strategy 1: delete entire row if any of the category is in minor_category
-        if exclude_strategy == 1:
-            if exclude_least:
-                metadata = metadata[~metadata['category'].apply(lambda x: contains_category(x, least_category))]
-            elif exclude_low:
-                metadata = metadata[~metadata['category'].apply(lambda x: contains_category(x, low_category))]
-            # eusure 'category' column is a list of integer
+        if self.is_exclude:
+            # - 1. Anger: 26 
+            # - 17. Pain: 28 
+            # - 22. Suffering: 35
+            least_category = [1, 17, 22]
+            # - 4. Aversion: 51
+            # - 6. Disapproval: 83
+            # - 10. Embarrassment: 56
+            # - 15. Fear: 75
+            # - 20. Sadness: 52
+            low_category = least_category + [4, 6, 10, 15, 20]
+            self.minor_category = least_category if exclude_least else low_category
+
+            print("# Excluding minor categories #")
+            print(f"w/o categories: {self.minor_category}")
+            print(f"exclude strategy: {exclude_strategy}")
+
+            # strategy 1: delete entire row if any of the category is in minor_category
+            if exclude_strategy == 1:
+                if exclude_least:
+                    metadata = metadata[~metadata['category'].apply(lambda x: contains_category(x, least_category))]
+                elif exclude_low:
+                    metadata = metadata[~metadata['category'].apply(lambda x: contains_category(x, low_category))]
+                # eusure 'category' column is a list of integer
+                metadata['category'] = metadata['category'].apply(lambda x: [int(i) for i in literal_eval(x)])
+            
+            # strategy 2: delete only corresponding category in a 'category' column. If nothing left, delete row itself
+            elif exclude_strategy == 2:
+                if exclude_least:
+                    metadata['category'] = metadata['category'].apply(lambda x: filter_and_remove_categories(x, least_category))
+                elif exclude_low:
+                    metadata['category'] = metadata['category'].apply(lambda x: filter_and_remove_categories(x, low_category))
+                # If nothing left, drop the row
+                metadata = metadata.dropna(subset=['category'])
+            else: 
+                raise ValueError("exclude_strategy should be either 1 or 2")
+
+        elif cluster:
+            print("# Clustering into groups #")
+            # Angry
+            self.angry_idx = [1, 2, 4, 6]
+            # Happy
+            self.happy_idx = [0, 5, 12, 13, 16, 18, 19, 24]
+            # Neutral
+            self.neutral_idx = [3, 7, 9, 11, 14, 23]
+            # Sad
+            self.sad_idx = [8, 10, 15, 17, 20, 21, 22, 25]
+
             metadata['category'] = metadata['category'].apply(lambda x: [int(i) for i in literal_eval(x)])
+            metadata['category'] = metadata['category'].apply(
+                lambda x: [0 if i in self.angry_idx else 1 if i in self.happy_idx else 2 if i in self.neutral_idx else 3 for i in x])
+            metadata['category'] = metadata['category'].apply(lambda x: list(set(x))) # remove duplicates
+        else:
+            raise ValueError("You should set either exclude_least or exclude_low to True")
         
-        # strategy 2: delete only corresponding category in a 'category' column. If nothing left, delete row itself
-        elif exclude_strategy == 2:
-            if exclude_least:
-                metadata['category'] = metadata['category'].apply(lambda x: filter_and_remove_categories(x, least_category))
-            elif exclude_low:
-                metadata['category'] = metadata['category'].apply(lambda x: filter_and_remove_categories(x, low_category))
-            # If nothing left, drop the row
-            metadata = metadata.dropna(subset=['category'])
-        else: 
-            raise ValueError("exclude_strategy should be either 1 or 2")
-
-        self.minor_category = least_category if exclude_least else low_category
-        self.is_exclude = exclude_least or exclude_low
-        
-        print("# Excluding minor categories #")
-        print(f"w/o categories: {least_category if exclude_least else low_category}")
-        print(f"exclude strategy: {exclude_strategy}")
-
         return metadata
         
     def __len__(self):
@@ -566,6 +615,13 @@ class BrainDataset2(Dataset):
             # because we already filtered out the minor categories in metadata
             assert np.sum(cat_label_temp) == np.sum(cat_label), "Minor categories are not properly removed"
             assert len(cat_label) == 26 - len(self.minor_category), "Minor categories are not properly removed"
+        elif self.cluster:
+            cat_label = np.zeros(4) # angry, happy, neutral, sad
+            for cat in sample['category']:
+                if cat in self.angry_idx:     cat_label[0] = 1
+                elif cat in self.happy_idx:   cat_label[1] = 1
+                elif cat in self.neutral_idx: cat_label[2] = 1
+                elif cat in self.sad_idx:     cat_label[3] = 1
         else:
             cat_label = cat_label_temp
         cat_label = torch.from_numpy(cat_label)

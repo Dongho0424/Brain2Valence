@@ -44,6 +44,7 @@ class BrainTrainer(EmoticTrainer):
                 exclude_least=self.args.exclude_least,
                 exclude_low=self.args.exclude_low,
                 exclude_strategy=self.args.exclude_strategy,
+                cluster=self.args.cluster,
             )
             
             val_dataset = BrainDataset2(
@@ -57,6 +58,7 @@ class BrainTrainer(EmoticTrainer):
                 exclude_least=self.args.exclude_least,
                 exclude_low=self.args.exclude_low,
                 exclude_strategy=self.args.exclude_strategy,
+                cluster=self.args.cluster,
             )
 
         elif self.args.dataset_ver == 1:
@@ -103,6 +105,8 @@ class BrainTrainer(EmoticTrainer):
             self.cat_num -= 3 # exclude 1, 17, 22
         elif self.args.exclude_low:
             self.cat_num -= 8 # exclude 1, 4, 6, 10, 15, 17, 20, 22
+        elif self.args.cluster:
+            self.cat_num = 4  # 0: angry, 1: happy, 2: neutral, 3: sad
 
         model = BrainModel(
             image_backbone=self.args.image_backbone,
