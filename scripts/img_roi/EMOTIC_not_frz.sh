@@ -5,13 +5,13 @@ fusion_ver=1 # fixed
 mlp_ver=mlp3 # AdaptiveMaxPool1d(h)
 cat_loss=softmargin
 wd=0.01
-pool_num=2024
+pool_num=2048
 pretrained_wgt_path=./pretrained_wgts/EMOTIC_pretrained_img_extractor_weight/best_model.pth
 project="verify_v1"
 
 for lr in 1e-5 3e-5 5e-5 1e-4 3e-4 5e-4 8e-6 
 do
-    model_name="img_roi_EMOTIC_not_frz_lr_${lr}"
+    model_name="img_roi_EMOTIC_not_frz_lr_${lr}_pn_${pool_num}"
     group="img_roi_EMOTIC_not_frz"
     note="250116_1"
 

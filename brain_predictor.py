@@ -74,10 +74,12 @@ class BrainPredictor():
             image_model_type=self.args.model_type,
             brain_backbone=self.args.brain_backbone,
             brain_data_type=self.args.data,
-            pretrained=self.args.pretrained,
-            wgt_path=self.args.wgt_path,
+            brain_in_dim=self.args.pool_num,
+            brain_out_dim=512,
             subjects=self.subjects,
             backbone_freeze=self.args.backbone_freeze,
+            pretrained=self.args.pretrained,
+            wgt_path=self.args.wgt_path,
             cat_only=self.args.cat_only,
             fusion_ver=self.args.fusion_ver
         )

@@ -26,13 +26,14 @@ class EmoticPredictor:
         model_name = self.args.model_name
         print(f"wandb {wandb_project} run {model_name}")
         wandb.login(host='https://api.wandb.ai')
-        wandb_name = self.args.wandb_name if self.args.wandb_name != None else self.args.model_name
-        wandb_config = vars(self.args),
+
+        wandb_config = vars(self.args)
         print("wandb_config:\n",wandb_config)
+        wandb_name = self.args.wandb_name if self.args.wandb_name != None else self.args.model_name
         wandb.init(
             id=wandb_name+self.args.notes,
-            entity=self.args.wandb_entity,
             project=wandb_project,
+            entity=self.args.wandb_entity,
             name=wandb_name,
             group=self.args.group,
             config=wandb_config,

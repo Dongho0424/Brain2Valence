@@ -5,13 +5,13 @@ fusion_ver=1 # fixed
 mlp_ver=mlp3 # AdaptiveMaxPool1d(h)
 cat_loss=softmargin
 wd=0.01
-pool_num=2024
+pool_num=2048
 pretrained_wgt_path=./pretrained_wgts/EMOTIC_pretrained_img_extractor_weight/best_model.pth
 project="verify_v1"
 
 for lr in 1e-5 3e-5 5e-5 1e-4 3e-4 5e-4 8e-6 
 do
-    model_name="img_roi_default_frz_lr_${lr}"
+    model_name="img_roi_default_frz_lr_${lr}_pn_${pool_num}"
     group="img_roi_default_frz"
     note="250116_1"
 
@@ -26,7 +26,7 @@ do
      --model-name $model_name --notes $note --group $group --wandb-project $project --wandb-entity "donghochoi" \
     --epochs 50 --batch-size 52 --lr ${lr} --weight-decay ${wd} --optimizer adamw --scheduler cosine --criterion emotic_SL1 --cat-criterion ${cat_loss} \
     --task-type brain --pretrained default --image-backbone resnet18 --model-type ${model_type} \
-    --brain-backbone ${mlp_ver} --pool-num ${pool_num} --data roi --cat-only --fusion-ver ${fusion_ver} --backbone-freeze s\
+    --brain-backbone ${mlp_ver} --pool-num ${pool_num} --data roi --cat-only --fusion-ver ${fusion_ver} --backbone-freeze \
     --best --wandb-log 
 done
 
