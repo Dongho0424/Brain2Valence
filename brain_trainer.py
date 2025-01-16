@@ -47,8 +47,20 @@ class BrainTrainer(EmoticTrainer):
                                    normalize=True,
                                    )
 
-        train_dl = DataLoader(train_dataset, batch_size=self.args.batch_size, shuffle=True)
-        val_dl = DataLoader(val_dataset, batch_size=self.args.batch_size, shuffle=False)
+        train_dl = DataLoader(
+            train_dataset,
+            batch_size=self.args.batch_size,
+            shuffle=True,
+            num_workers=4,
+            pin_memory=True,
+        )
+        val_dl = DataLoader(
+            val_dataset,
+            batch_size=self.args.batch_size,
+            shuffle=False,
+            num_workers=4,
+            pin_memory=True,
+        )
         print('# train data:', len(train_dataset))
         print('# val data:', len(val_dataset))
 
@@ -79,7 +91,7 @@ class BrainTrainer(EmoticTrainer):
         print("#### enter Training ####")
 
         best_val_loss = float("inf")
-        best_val_ap_mean = -float("inf")
+        best_val_mAP = -float("inf")
         # now set equal
         cat_loss_param = 0.5
         vad_loss_param = 0.5
@@ -170,8 +182,8 @@ class BrainTrainer(EmoticTrainer):
                 warnings.filterwarnings("ignore", message="No positive class found in y_true, recall is set to one for all thresholds")
 
                 ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(26)]
-                ap_mean = np.mean(ap_scores)
-                wandb.log({"val_AP_mean": ap_mean}, step=epoch)
+                mAP = np.mean(ap_scores)
+                wandb.log({"val_mAP": mAP}, step=epoch)
 
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
@@ -179,9 +191,9 @@ class BrainTrainer(EmoticTrainer):
                 wandb.log({"best_val_loss": best_val_loss}, step=epoch)
                 self.save_model(self.args, self.model, best=True)
 
-            if ap_mean > best_val_ap_mean:
-                best_val_ap_mean = ap_mean
-                wandb.log({"best_val_AP_mean": ap_mean}, step=epoch)
+            if mAP > best_val_mAP:
+                best_val_mAP = mAP
+                wandb.log({"best_val_mAP": mAP}, step=epoch)
 
             self.scheduler.step()
 

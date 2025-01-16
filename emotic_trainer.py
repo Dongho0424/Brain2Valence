@@ -44,7 +44,7 @@ class EmoticTrainer:
         wandb_name = self.args.wandb_name if self.args.wandb_name != None else self.args.model_name
         wandb.init(
             id=wandb_name+self.args.notes,
-            entity="donghochoi",
+            entity=self.args.wandb_entity,
             project=wandb_project,
             name=wandb_name,
             group=self.args.group,
@@ -97,8 +97,20 @@ class EmoticTrainer:
                                     normalize=True,
                                     )
 
-        train_dl = DataLoader(train_dataset, batch_size=self.args.batch_size, shuffle=True)
-        val_dl = DataLoader(val_dataset, batch_size=self.args.batch_size, shuffle=False)
+        train_dl = DataLoader(
+            train_dataset,
+            batch_size=self.args.batch_size,
+            shuffle=True,
+            num_workers=4,
+            pin_memory=True,
+        )
+        val_dl = DataLoader(
+            val_dataset,
+            batch_size=self.args.batch_size,
+            shuffle=False,
+            num_workers=4,
+            pin_memory=True,
+        )
         print('# train data:', len(train_dataset))
         print('# val data:', len(val_dataset))
 
@@ -131,8 +143,21 @@ class EmoticTrainer:
                                     normalize=True,
                                     )
 
-        train_dl = DataLoader(train_dataset, batch_size=self.args.batch_size, shuffle=True)
-        val_dl = DataLoader(val_dataset, batch_size=self.args.batch_size, shuffle=False)
+        train_dl = DataLoader(
+            train_dataset,
+            batch_size=self.args.batch_size,
+            shuffle=True,
+            num_workers=4,
+            pin_memory=True,
+        )
+
+        val_dl = DataLoader(
+            val_dataset,
+            batch_size=self.args.batch_size,
+            shuffle=False,
+            num_workers=4,
+            pin_memory=True,
+        )
         print('# train data:', len(train_dataset))
         print('# val data:', len(val_dataset))
 

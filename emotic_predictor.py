@@ -26,24 +26,12 @@ class EmoticPredictor:
         model_name = self.args.model_name
         print(f"wandb {wandb_project} run {model_name}")
         wandb.login(host='https://api.wandb.ai')
-        wandb_config = {
-            "model_name": self.args.model_name,
-            "subject": "1, 2, 5, 7" if self.args.all_subjects else str(self.args.subj),
-            "image_backbone": self.args.image_backbone,
-            "brain_backbone": self.args.brain_backbone,
-            "batch_size": self.args.batch_size,
-            "epochs": self.args.epochs,
-            "num_test": self.num_test,
-            "seed": self.args.seed,
-            "weight_decay": self.args.weight_decay,
-            "pretrained": self.args.pretrained,
-            "pretrained_wgt_path": self.args.wgt_path,
-            "backbone_freeze": self.args.backbone_freeze,
-        }
-        print("wandb_config:\n",wandb_config)
         wandb_name = self.args.wandb_name if self.args.wandb_name != None else self.args.model_name
+        wandb_config = vars(self.args),
+        print("wandb_config:\n",wandb_config)
         wandb.init(
             id=wandb_name+self.args.notes,
+            entity=self.args.wandb_entity,
             project=wandb_project,
             name=wandb_name,
             group=self.args.group,
@@ -84,7 +72,13 @@ class EmoticPredictor:
                                     )
 
         # always batch size is 1
-        test_dl = DataLoader(test_dataset, batch_size=1, shuffle=False)
+        test_dl = DataLoader(
+            test_dataset, 
+            batch_size=1, 
+            shuffle=False,
+            num_workers=4,
+            pin_memory=True
+        )
         print('# test data:', len(test_dataset))
 
         return test_dl, len(test_dataset)
@@ -109,7 +103,13 @@ class EmoticPredictor:
                                     )
 
         # always batch size is 1
-        test_dl = DataLoader(test_dataset, batch_size=1, shuffle=False)
+        test_dl = DataLoader(
+            test_dataset, 
+            batch_size=1, 
+            shuffle=False,
+            num_workers=4,
+            pin_memory=True
+        )
         print('# test data:', len(test_dataset))
 
         return test_dl, len(test_dataset)
@@ -171,14 +171,14 @@ class EmoticPredictor:
 
         # evaluation for categorical emotion
         ap_scores = [average_precision_score(gt_cats[:, i], pred_cats[:, i]) for i in range(26)]
-        ap_mean = np.mean(ap_scores)
+        mAP = np.mean(ap_scores)
 
-        if self.args.wandb_log: wandb.log({"AP_mean": ap_mean})
+        if self.args.wandb_log: wandb.log({"mAP": mAP})
         
         _, idx2cat = utils.get_emotic_categories()
         # for i, ap in enumerate(ap_scores):
             # print(f"AP for {i}. {idx2cat[i]}: {ap:.4f}")
-        print(f"{self.args.lr} model; AP_mean: {ap_mean}")
+        print(f"{self.args.lr} model; mAP: {mAP}")
 
         # plot AP per category
         plt.figure(figsize=(10, 8))

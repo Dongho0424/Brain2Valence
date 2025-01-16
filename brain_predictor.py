@@ -32,6 +32,7 @@ class BrainPredictor():
         wandb.init(
             id=wandb_name+self.args.notes,
             project=wandb_project,
+            entity=self.args.wandb_entity,
             name=wandb_name,
             group=self.args.group,
             config=wandb_config,
@@ -56,7 +57,13 @@ class BrainPredictor():
                                     )
 
         # always batch size is 1
-        test_dl = DataLoader(test_dataset, batch_size=1, shuffle=False)
+        test_dl = DataLoader(
+            test_dataset, 
+            batch_size=1, 
+            shuffle=False,
+            num_workers=4,
+            pin_memory=True
+        )
         print('# test data:', len(test_dataset))
 
         return test_dl, len(test_dataset)
