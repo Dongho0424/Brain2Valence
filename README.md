@@ -25,7 +25,7 @@
 ### pretrained weight
 - Imagenet: by torchvision package. nothing to do.
 - Places365: `data/places/resnet18_state_dict.pth`
-- EMOTIC: `trained_models/EMOTIC_pretrained_img_extractor_weight/best_model.pth`
+- EMOTIC: `pretrained_wgts/EMOTIC_pretrained_img_extractor_weight/best_model.pth`
 ## ROI + img model
 ### example 1
 - training from **scratch**

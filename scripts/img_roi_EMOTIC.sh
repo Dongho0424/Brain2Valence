@@ -6,7 +6,7 @@ mlp_ver=mlp3 # AdaptiveMaxPool1d(h)
 cat_loss=softmargin
 wd=0.01
 pool_num=2048
-pretrained_wgt_path=./trained_models/EMOTIC_pretrained_img_extractor_weight/best_model.pth
+pretrained_wgt_path=./pretrained_wgts/EMOTIC_pretrained_img_extractor_weight/best_model.pth
 for lr in 1e-5 
 do
     CUDA_VISIBLE_DEVICES=${device} python3 -W "ignore" main.py --exec_mode train --subj ${subj} \

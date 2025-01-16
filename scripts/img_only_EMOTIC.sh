@@ -1,7 +1,7 @@
 device=0
 model_type=BI
 subj=1
-pretrained_wgt_path=./trained_models/EMOTIC_pretrained_img_extractor_weight/best_model.pth
+pretrained_wgt_path=./pretrained_wgts/EMOTIC_pretrained_img_extractor_weight/best_model.pth
 
 for lr in 1e-5 
 do
